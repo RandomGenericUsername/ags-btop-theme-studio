@@ -1,0 +1,82 @@
+/* btop Theme Studio — token-bound chrome
+ * ==========================================================================
+ * The studio AUTHORS btop themes; its own chrome follows the desktop palette.
+ * Every chrome colour below is a runtime token from colors.css (applied by
+ * app.tsx through the platform Theme port, spine AD-13); a wallpaper change
+ * repaints the whole window. Same token contract as the other GUI tools:
+ *   @color_00 .. @color_15 / @color_background / @color_foreground
+ *
+ * Shared language (gui-unification-ux-spec):
+ *   selection   = @color_10  (where you are)
+ *   action      = @color_06  (toggles on, primary button); text follows
+ *                @color_foreground because the action slot is not guaranteed
+ *                bright (live palette: dark steel)
+ *   fields      = solid @color_01
+ *   caution     = @color_03  (warnings)
+ *   success     = @color_02  (status line)
+ *   borders     = alpha(@color_foreground, 0.12)
+ *
+ * CONTENT literals are deliberate and stay: `.canvas` is the neutral stage the
+ * schematic is judged on (it shows the candidate btop theme, not the desktop
+ * palette) and `.live-frame` reproduces btop's own black terminal. Neither is
+ * chrome, so neither follows the desktop palette.
+ * ========================================================================== */
+.btop-theme-studio {
+  background: @color_00;
+  color: @color_foreground;
+}
+.studio-root { background: @color_00; }
+.studio-left {
+  background: alpha(@color_01, 0.28);
+  border-right: 1px solid alpha(@color_foreground, 0.12);
+  min-width: 260px;
+  padding: 8px;
+}
+.studio-center { padding: 8px; }
+.studio-right {
+  background: alpha(@color_01, 0.28);
+  border-left: 1px solid alpha(@color_foreground, 0.12);
+  min-width: 320px;
+  padding: 8px;
+}
+.h2 {
+  font-size: 11px;
+  color: alpha(@color_foreground, 0.42);
+  margin-top: 6px;
+}
+.hint { color: alpha(@color_foreground, 0.42); font-size: 11px; }
+.warn { color: @color_03; font-size: 11px; }
+.status { color: @color_02; font-size: 11px; }
+.path { font-family: monospace; font-size: 11px; color: @color_04; }
+.caption { font-family: monospace; font-size: 11px; color: alpha(@color_foreground, 0.42); }
+.diag, .diff { font-family: monospace; font-size: 11px; color: @color_foreground; }
+.toggle, .btn, .pchip, .item, .titem {
+  background: @color_01;
+  border: 1px solid alpha(@color_foreground, 0.12);
+  color: @color_foreground;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.toggle.on { border-color: @color_06; color: @color_06; }
+.btn.primary {
+  background: alpha(@color_06, 0.22);
+  border-color: @color_06;
+  color: @color_foreground;
+}
+.group { color: alpha(@color_foreground, 0.42); font-size: 10px; margin-top: 4px; }
+.bbox { border: 1px solid alpha(@color_foreground, 0.12); border-radius: 4px; padding: 4px; }
+.btitle { font-weight: 700; font-size: 11px; }
+.el { font-size: 10px; color: alpha(@color_foreground, 0.72); }
+.el.hl { outline: 1px solid @color_06; color: @color_foreground; }
+/* Content stage — shows the candidate btop theme, not the desktop palette. */
+.canvas { background: #101216; padding: 8px; }
+.live { color: alpha(@color_foreground, 0.42); font-size: 11px; }
+/* Content — a faithful btop terminal frame, so btop's own colours apply. */
+.live-frame {
+  font-family: "JetBrainsMono Nerd Font", "Adwaita Mono", "DejaVu Sans Mono", monospace;
+  font-size: 8px;
+  color: @color_foreground;
+  background: #000000;
+}
+.swatches { }
+.swatch { padding: 0; min-width: 22px; min-height: 18px; }

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "app": "btop-theme-studio",
+  "instance": "btop-theme-studio",
+  "configDir": "ags-btop-studio",
+  "mode": "live",
+  "holdsUnsavedState": true
+}
