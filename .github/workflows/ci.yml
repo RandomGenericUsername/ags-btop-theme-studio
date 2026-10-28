@@ -1,0 +1,59 @@
+name: ci
+
+# Stock-runner CI for ags-btop-theme-studio (AD-19/AD-23/AD-33).
+#
+# Only stock `ubuntu-latest` jobs run here: the pure suites, the executable
+# palette-refresh handler tests, the manifest/handler/template conformance gate
+# and the generated key->widget drift gate (`make ci`). Typecheck and
+# `ags bundle` are LOCAL gates: they need `ags` on PATH plus the machine's
+# GIR/Astal libraries, which a stock runner does not have. Do not add a
+# self-hosted job.
+#
+# The program tuple is `ags-platform`/`contracts` v0.3.0. Locally those tags
+# are symlinked under `.dev/`; CI checks out the exact tags explicitly. When a
+# tag is local-only and not yet published, the checkout step fails loudly --
+# never silently skips the gate.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    name: stock-gates
+    runs-on: ubuntu-latest
+    env:
+      CONTRACTS_ROOT: ${{ github.workspace }}/contracts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check out the pinned ags-platform tuple
+        uses: actions/checkout@v4
+        with:
+          repository: RandomGenericUsername/ags-platform
+          ref: v0.3.0
+          path: .dev/ags-platform/v0.3.0
+
+      - name: Check out the pinned contracts tuple
+        uses: actions/checkout@v4
+        with:
+          repository: RandomGenericUsername/contracts
+          ref: v0.3.0
+          path: contracts
+
+      - name: Assert the pinned tuple is present
+        run: |
+          test -f .dev/ags-platform/v0.3.0/index.ts
+          test -f contracts/schemas/ags-app-manifest.schema.json
+
+      - name: Run the stock-runner gates
+        run: make ci
