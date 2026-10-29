@@ -350,3 +350,7 @@
   border: 1px dashed alpha(@color_foreground, 0.30);
   color: alpha(@color_foreground, 0.35);
 }
+
+/* Sample meter in the key-coverage card (load/fill feedback in Components). */
+.coverage-meter-label { font-size: 9px; color: alpha(@color_foreground, 0.45); }
+.coverage-meter { font-family: monospace; font-size: 11px; }

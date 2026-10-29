@@ -1,6 +1,27 @@
 # Changelog
 
+## v0.1.2 — 2026-10-28
+
+- Restore the **real btop live preview as the default center stage**; v0.1.1
+  opened on the label-only Components pane and hid the real preview behind the
+  Live tab, making the center look inert on launch.
+- Render the live frame on launch and **debounce-refresh it when the effective
+  theme changes** while Live is active (theme/key edits, Revert, palette
+  refresh), without refreshing on selection/scope/target/control changes.
+- Keep Components available with a `meterFill()`-driven sample meter so the
+  load/fill controls have a visible effect in that pane.
+- Restore the dedicated live scroller: the caption and Refresh control stay
+  pinned, and each capture resets to the top instead of leaving the outer
+  canvas on the blank end of the frame (the v0.1.1 tab refactor dropped it).
+- Runtime audit: theme selection, New/Duplicate/Delete/Fork, Active, repo and
+  installed saves, picker scopes, gradient, transparent, diagnosis, pending
+  diff, preset/load, palette-refresh and window toggle all exercised against
+  renamed source instances; v0.1.0 baseline compared for save/selection behavior.
+- Pre-existing and unchanged: the `~/.dotfiles` repo-root default, the
+  `ags run` warm-instance conflict, and the install-spine save path.
+
 ## v0.1.1 — 2026-10-28
+ — 2026-10-28
 
 - Visual/layout pass on the Studio shell to match mock v8:
   - header/intro strip and a 280 / 1fr / 320 three-column hierarchy;

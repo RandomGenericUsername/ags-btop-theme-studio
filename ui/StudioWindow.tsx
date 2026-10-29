@@ -6,6 +6,7 @@ import {
   DEFAULT_CONTROLS,
   FIXED_FILL_LEVELS,
   backdropColour,
+  meterFill,
   type PreviewControls,
 } from "../lib/preview";
 import { parseBtopConf, presetAt } from "../lib/btop-conf";
@@ -470,8 +471,8 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
     button.connect("clicked", () => setControls({ ...controls(), fixedFill: level }));
     fillButtons.push(button);
   }
-  const compBtn = new Gtk.Button({ label: "Components", css_classes: ["toggle", "on"] });
-  const liveBtn = new Gtk.Button({ label: "Live", css_classes: ["toggle"] });
+  const compBtn = new Gtk.Button({ label: "Components", css_classes: ["toggle"] });
+  const liveBtn = new Gtk.Button({ label: "Live", css_classes: ["toggle", "on"] });
   const backdropBtn = new Gtk.Button({ label: "Neutral bg", css_classes: ["toggle"] });
   const highlightBtn = new Gtk.Button({ label: "Highlight", css_classes: ["toggle", "on"] });
   const reserveBtn = new Gtk.Button({ label: "Reserve surface", css_classes: ["toggle"] });
@@ -534,7 +535,12 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   canvas.get_style_context().add_provider(canvasProvider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
   canvasScroll.set_child(canvas);
 
-  const componentsPane = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, css_classes: ["stage"] });
+  const componentsPane = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 8,
+    css_classes: ["stage"],
+    visible: false,
+  });
   const schematicCap = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["stage-cap"] });
   const schematicWarn = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["warn"] });
   const schematicGrid = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, css_classes: ["bgrid"] });
@@ -551,6 +557,8 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   coverageRow.append(coverageSwatch);
   coverageRow.append(coverageValue);
   const coverageChips = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 5 });
+  const coverageMeterLabel = new Gtk.Label({ xalign: 0, css_classes: ["coverage-meter-label"] });
+  const coverageMeter = new Gtk.Label({ xalign: 0, css_classes: ["coverage-meter"] });
   const coverageNote = new Gtk.Label({
     label: "lit = shown in the current preset; faint = this key paints it but the box is OFF",
     xalign: 0,
@@ -560,11 +568,18 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   coverage.append(coverageTitle);
   coverage.append(coverageRow);
   coverage.append(coverageChips);
+  coverage.append(coverageMeterLabel);
+  coverage.append(coverageMeter);
   coverage.append(coverageNote);
   componentsPane.append(coverage);
   canvas.append(componentsPane);
 
-  const livePane = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, css_classes: ["stage"], visible: false });
+  const livePane = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 8,
+    css_classes: ["stage"],
+    visible: true,
+  });
   const liveCap = new Gtk.Label({
     label: "Live — the real btop binary on a pty (a fresh capture per refresh)",
     xalign: 0,
@@ -576,20 +591,66 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   const liveStatus = new Gtk.Label({ xalign: 0, hexpand: true, css_classes: ["hint"] });
   liveBar.append(liveBtnRefresh);
   liveBar.append(liveStatus);
+  // The frame is much wider/taller than the center; keep its own scroller so
+  // the caption/refresh controls never scroll away with the capture (v0.1.0
+  // had this separate live scroller and the visual pass accidentally dropped
+  // it, which let the outer canvas land on the blank end of a capture).
+  const liveScroll = new Gtk.ScrolledWindow({
+    vexpand: true,
+    hexpand: true,
+    hscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+    vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+  });
   const liveFrame = new Gtk.Label({ label: LIVE_PLACEHOLDER, xalign: 0, css_classes: ["live-frame"] });
+  liveScroll.set_child(liveFrame);
   livePane.append(liveCap);
   livePane.append(liveBar);
-  livePane.append(liveFrame);
+  livePane.append(liveScroll);
   canvas.append(livePane);
 
-  let livePaneActive = false;
+  // The real btop preview is the primary stage (v0.1.0 kept it visible). The
+  // Components tab is the labelled schematic; both share the same center pane.
+  let livePaneActive = true;
+  let liveRefreshTimer: number | null = null;
+  let liveRefreshInFlight = false;
+  let liveSignature = "";
+
+  function liveSignatureOf(): string {
+    return `${currentId()}|${serializeTheme(effective())}`;
+  }
+
+  function scheduleLiveRefresh(): void {
+    if (liveRefreshTimer !== null) {
+      GLib.source_remove(liveRefreshTimer);
+      liveRefreshTimer = null;
+    }
+    liveRefreshTimer = GLib.timeout_add(0, 350, () => {
+      liveRefreshTimer = null;
+      refreshLive();
+      return false;
+    });
+  }
+
   function showPane(live: boolean): void {
     livePaneActive = live;
     componentsPane.set_visible(!live);
     livePane.set_visible(live);
     compBtn.set_css_classes(live ? ["toggle"] : ["toggle", "on"]);
     liveBtn.set_css_classes(live ? ["toggle", "on"] : ["toggle"]);
-    if (live && liveFrame.get_label() === LIVE_PLACEHOLDER) refreshLive();
+    if (!live) {
+      if (liveRefreshTimer !== null) {
+        GLib.source_remove(liveRefreshTimer);
+        liveRefreshTimer = null;
+      }
+      return;
+    }
+    const signature = liveSignatureOf();
+    if (liveFrame.get_label() === LIVE_PLACEHOLDER || signature !== liveSignature) {
+      liveSignature = signature;
+      refreshLive();
+    }
+    liveScroll.get_vadjustment().set_value(0);
+    canvasScroll.get_vadjustment().set_value(0);
   }
   compBtn.connect("clicked", () => showPane(false));
   liveBtn.connect("clicked", () => showPane(true));
@@ -615,6 +676,12 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   center.append(diffPanel);
 
   function refreshLive(): void {
+    if (liveRefreshInFlight) return;
+    if (liveRefreshTimer !== null) {
+      GLib.source_remove(liveRefreshTimer);
+      liveRefreshTimer = null;
+    }
+    liveRefreshInFlight = true;
     const theme = current();
     const tmp = `${GLib.get_tmp_dir()}/btop-studio-preview.theme`;
     writeFile(tmp, serializeTheme(effective()));
@@ -627,6 +694,9 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
         try {
           const parsed = JSON.parse(out) as { frame_text?: string };
           liveFrame.set_label(parsed.frame_text ?? "(empty frame)");
+          liveScroll.get_vadjustment().set_value(0);
+          liveScroll.get_hadjustment().set_value(0);
+          canvasScroll.get_vadjustment().set_value(0);
           liveStatus.set_label(`Rendered ${theme.name} with live btop.`);
           setStatus(`Live preview rendered by the real btop binary (${theme.name}).`);
         } catch {
@@ -638,7 +708,17 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
         liveFrame.set_label(`Live preview failed: ${error}`);
         liveStatus.set_label("Live preview failed — check uv, pyte and btop.");
       })
-      .finally(() => liveBtnRefresh.set_label("Refresh live preview (real btop)"));
+      .finally(() => {
+        liveRefreshInFlight = false;
+        liveBtnRefresh.set_label("Refresh live preview (real btop)");
+        if (livePaneActive && !liveRefreshInFlight) {
+          const latest = liveSignatureOf();
+          if (latest !== liveSignature) {
+            liveSignature = latest;
+            scheduleLiveRefresh();
+          }
+        }
+      });
   }
   liveBtnRefresh.connect("clicked", refreshLive);
 
@@ -868,6 +948,23 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
       else if (painted) chips.push("off");
       coverageChips.append(new Gtk.Label({ label: module, xalign: 0, css_classes: chips }));
     }
+
+    // A small sample meter keeps the load/fill controls live in Components
+    // without pretending to be btop's geometry; Live is the real capture.
+    const family = key && /_(start|mid|end)$/.test(key) ? key.replace(/_(start|mid|end)$/, "") : "used";
+    const fill = meterFill(controls(), controls().load);
+    const start = resolveHex(effective()[`${family}_start`], palette()) || "#c2c2c5";
+    const end = resolveHex(effective()[`${family}_end`], palette()) || start;
+    const empty = resolveHex(effective()["meter_bg"], palette()) || "#333333";
+    const cells = 28;
+    const filled = Math.max(0, Math.min(cells, Math.round((cells * fill) / 100)));
+    let meter = "";
+    for (let i = 0; i < cells; i += 1) {
+      const colour = i < filled ? (i < filled / 2 ? start : end) : empty;
+      meter += `<span foreground="${colour}">█</span>`;
+    }
+    coverageMeterLabel.set_label(`sample ${family} meter · load ${fill}%`);
+    coverageMeter.set_markup(meter);
   }
 
   function renderDiagnosis(): void {
@@ -1144,6 +1241,13 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
     // re-render (state changes must not bounce them back to Components).
     compBtn.set_css_classes(livePaneActive ? ["toggle"] : ["toggle", "on"]);
     liveBtn.set_css_classes(livePaneActive ? ["toggle", "on"] : ["toggle"]);
+    if (livePaneActive && !liveRefreshInFlight) {
+      const signature = liveSignatureOf();
+      if (signature !== liveSignature) {
+        liveSignature = signature;
+        scheduleLiveRefresh();
+      }
+    }
   }
 
   createEffect(renderAll);

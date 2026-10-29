@@ -301,6 +301,18 @@ test("the studio shell keeps the mock-v8 three-column hierarchy", () => {
   }
 });
 
+test("the real btop preview is the default stage and follows edits", () => {
+  const window = readText("ui", "StudioWindow.tsx");
+  assert.match(window, /let livePaneActive = true/);
+  assert.match(window, /function liveSignatureOf/);
+  assert.match(window, /function scheduleLiveRefresh/);
+  assert.match(window, /serializeTheme\(effective\(\)\)/);
+  assert.match(window, /meterFill\(controls\(\), controls\(\)\.load\)/);
+  assert.match(window, /liveFrame\.get_label\(\) === LIVE_PLACEHOLDER/);
+  assert.match(window, /const liveScroll = new Gtk\.ScrolledWindow/);
+  assert.match(window, /liveScroll\.get_vadjustment\(\)\.set_value\(0\)/);
+});
+
 test("the app package keeps its tests, vendored sources and live engine", () => {
   for (const path of [
     "tests/unit.test.mjs",
