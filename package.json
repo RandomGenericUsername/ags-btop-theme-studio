@@ -1,6 +1,6 @@
 {
   "name": "ags-btop-theme-studio",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "description": "Standalone AGS/GTK4 btop Theme Studio (instance btop-theme-studio, config dir ags-btop-studio).",

@@ -1,5 +1,6 @@
 import { Astal, Gdk, Gtk } from "ags/gtk4";
 import GLib from "gi://GLib?version=2.0";
+import Pango from "gi://Pango?version=1.0";
 import { createEffect, createState } from "ags";
 import { execAsync } from "ags/process";
 import {
@@ -11,6 +12,14 @@ import {
 } from "../lib/preview";
 import { parseBtopConf, presetAt } from "../lib/btop-conf";
 import { buildSchematic, hiddenModuleWarning } from "../lib/schematic";
+import {
+  GRAPH_GLYPHS,
+  clampPercent,
+  gradientAt,
+  graphLevels,
+  meterBand,
+  type GradientStops,
+} from "../lib/schematic-graphics";
 import { KEY_GROUPS, NAMED_TOKENS } from "../lib/theme-keys";
 import { KEY_WIDGET_MAP, isUnreferenced, modulesFor, sitesFor } from "../lib/key-map";
 import {
@@ -124,6 +133,31 @@ function initialLibrary(): Theme[] {
 function fillRule(selector: string, hex: string): string {
   return `${selector} { background-color: ${hex || "transparent"}; }`;
 }
+
+/** Escape a string for Pango markup (labels may carry user theme names). */
+function escapeMarkup(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** A Pango span with a resolved theme colour. */
+function colourSpan(hex: string, text: string, weight?: string): string {
+  const attrs = [`foreground="${hex}"`];
+  if (weight) attrs.push(`weight="${weight}"`);
+  return `<span ${attrs.join(" ")}>${escapeMarkup(text)}</span>`;
+}
+
+/** `rgba()` from a resolved hex, for GTK CSS transparencies. */
+function rgbaHex(hex: string, alpha: number): string {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(hex);
+  if (!match) return `rgba(255, 255, 255, ${alpha})`;
+  const value = parseInt(match[1], 16);
+  const r = (value >> 16) & 0xff;
+  const g = (value >> 8) & 0xff;
+  const b = value & 0xff;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 
 // ── the window ──────────────────────────────────────────────────────────────
 
@@ -543,10 +577,26 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   });
   const schematicCap = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["stage-cap"] });
   const schematicWarn = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["warn"] });
-  const schematicGrid = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, css_classes: ["bgrid"] });
+  // The btop reconstruction: a topbar, then the mock's three columns of boxes.
+  const schematicStage = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 4,
+    hexpand: true,
+    css_classes: ["btop-frame"],
+  });
+  const schematicTop = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 });
+  const schematicGrid = new Gtk.Box({
+    orientation: Gtk.Orientation.HORIZONTAL,
+    spacing: 6,
+    hexpand: true,
+    homogeneous: true,
+    css_classes: ["bgrid"],
+  });
+  schematicStage.append(schematicTop);
+  schematicStage.append(schematicGrid);
   componentsPane.append(schematicCap);
   componentsPane.append(schematicWarn);
-  componentsPane.append(schematicGrid);
+  componentsPane.append(schematicStage);
   const coverage = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, css_classes: ["anat"] });
   const coverageTitle = new Gtk.Label({ xalign: 0, css_classes: ["anat-title"] });
   const coverageRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 });
@@ -903,40 +953,632 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
     }
   }
 
+  // ── graphical btop schematic ─────────────────────────────────────────────
+  //
+  // Components reconstructs mock v8's `#btop` tree from themed primitives:
+  // box borders, `┤ title ├` headers, dotted leaders, gradient meter bars and
+  // graph lines. Every drawn element is a button; its click selects the theme
+  // key that paints it, so the right-hand selection / palette editor / pending
+  // diff / diagnosis follow. Live stays the real btop capture.
+
+  function rawColour(key: string): string {
+    return resolveHex(effective()[key], palette());
+  }
+
+  function colourOf(key: string, fallback: string): string {
+    const value = rawColour(key);
+    return HEX_COLOUR.test(value) ? value : fallback;
+  }
+
+  function mainFg(): string {
+    return colourOf("main_fg", "#c2c2c5");
+  }
+
+  function borderOf(key: string): string {
+    return colourOf(key, colourOf("inactive_fg", "#6b7280"));
+  }
+
+  function stopsOf(family: string): GradientStops {
+    const fallback = mainFg();
+    const end = colourOf(`${family}_end`, fallback);
+    const start = colourOf(`${family}_start`, end);
+    const rawMid = rawColour(`${family}_mid`);
+    return { start, mid: HEX_COLOUR.test(rawMid) ? rawMid : "", end };
+  }
+
+  function meterBackground(): string {
+    const raw = rawColour("meter_bg");
+    return HEX_COLOUR.test(raw) ? raw : "";
+  }
+
+  function level(base: number): number {
+    return meterFill(controls(), base);
+  }
+
+  function selectedKeys(keys: readonly string[]): boolean {
+    const key = selected();
+    return highlight() && key !== null && keys.includes(key);
+  }
+
+  function hit(
+    child: Gtk.Widget,
+    keys: readonly string[],
+    primary: string,
+    extra: readonly string[] = [],
+  ): Gtk.Button {
+    const button = new Gtk.Button({
+      css_classes: ["key-hit", ...extra],
+      tooltip_text: `click → ${primary}`,
+    });
+    button.set_child(child);
+    button.connect("clicked", () => setSelected(primary));
+    // Give the custom button an accessible name equal to the key it selects;
+    // the child is a layout box, so GTK cannot infer one.
+    try {
+      button.update_property([Gtk.AccessibleProperty.LABEL], [primary]);
+    } catch {
+      /* older GTK without the accessible property enum */
+    }
+    if (selectedKeys(keys)) button.add_css_class("hl");
+    return button;
+  }
+
+  function textLabel(text: string, colour: string, extra: readonly string[] = []): Gtk.Label {
+    const label = new Gtk.Label({ xalign: 0, css_classes: ["btop-text", ...extra] });
+    label.set_markup(colourSpan(colour, text));
+    return label;
+  }
+
+  function valueControl(
+    text: string,
+    colour: string,
+    primary: string,
+    keys: readonly string[] = [primary],
+    extra: readonly string[] = ["btop-value"],
+  ): Gtk.Button {
+    return hit(textLabel(text, colour, extra), keys, primary, ["value-hit"]);
+  }
+
+  function spacer(): Gtk.Box {
+    return new Gtk.Box({ hexpand: true });
+  }
+
+  function rowOf(...children: Gtk.Widget[]): Gtk.Box {
+    const row = new Gtk.Box({
+      orientation: Gtk.Orientation.HORIZONTAL,
+      spacing: 5,
+      css_classes: ["btop-row"],
+    });
+    for (const child of children) row.append(child);
+    return row;
+  }
+
+  /** The proc table is the widest block; it uses tighter spacing. */
+  function procRow(...children: Gtk.Widget[]): Gtk.Box {
+    const row = new Gtk.Box({
+      orientation: Gtk.Orientation.HORIZONTAL,
+      spacing: 3,
+      css_classes: ["btop-row", "btop-proc-row"],
+    });
+    for (const child of children) row.append(child);
+    return row;
+  }
+
+  function leader(): Gtk.Button {
+    const line = new Gtk.Box({ hexpand: true, css_classes: ["leader-line"] });
+    return hit(line, ["div_line"], "div_line", ["leader-hit"]);
+  }
+
+  /** A meter is a filled + empty pair so either half selects its own key. */
+  function meter(family: string, percent: number, cells = 16): Gtk.Box {
+    const width = Math.max(1, Math.floor(cells));
+    const band = meterBand(stopsOf(family), percent, width, meterBackground());
+    const fillLabel = new Gtk.Label({ xalign: 0, css_classes: ["btop-meter"] });
+    fillLabel.set_markup(band.fill.map((colour) => colourSpan(colour, band.glyph)).join(""));
+    const emptyLabel = new Gtk.Label({ xalign: 0, css_classes: ["btop-meter"] });
+    emptyLabel.set_markup(
+      Array.from({ length: width - band.filled }, () => colourSpan(band.empty, band.emptyGlyph)).join(""),
+    );
+    const bar = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 0, css_classes: ["btop-meter-bar"] });
+    bar.append(hit(fillLabel, [`${family}_start`, `${family}_mid`, `${family}_end`], `${family}_start`, ["meter-hit"]));
+    bar.append(hit(emptyLabel, ["meter_bg"], "meter_bg", ["meter-hit"]));
+    return bar;
+  }
+
+  function graph(
+    family: string,
+    width: number,
+    intensity: number,
+    phase: number,
+    primary = `${family}_start`,
+  ): Gtk.Button {
+    const stops = stopsOf(family);
+    const levels = graphLevels(width, intensity, phase);
+    const accent = primary === "graph_text" ? colourOf("graph_text", mainFg()) : null;
+    const markup = levels
+      .map((height, index) =>
+        colourSpan(accent ?? gradientAt(stops, index, levels.length), GRAPH_GLYPHS[height]),
+      )
+      .join("");
+    const label = new Gtk.Label({ xalign: 0, css_classes: ["btop-graph"] });
+    label.set_markup(markup);
+    return hit(
+      label,
+      [`${family}_start`, `${family}_mid`, `${family}_end`, "graph_text"],
+      primary,
+      ["graph-hit"],
+    );
+  }
+
+  function meterRow(family: string, percent: number, cells = 16): Gtk.Box {
+    const percentLabel = `${Math.round(clampPercent(percent))}%`;
+    return rowOf(
+      meter(family, percent, cells),
+      spacer(),
+      valueControl(percentLabel, mainFg(), `${family}_start`, [
+        `${family}_start`,
+        `${family}_mid`,
+        `${family}_end`,
+        "meter_bg",
+      ]),
+    );
+  }
+
+  function plainRow(label: string, value: string): Gtk.Box {
+    return rowOf(
+      textLabel(label, mainFg(), ["btop-lab"]),
+      leader(),
+      valueControl(value, mainFg(), "main_fg", ["main_fg"]),
+    );
+  }
+
+  function titleControl(name: string, boxKey: string, right?: string): Gtk.Button {
+    const border = borderOf(boxKey);
+    const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4, hexpand: true });
+    row.append(textLabel("┤", border));
+    row.append(textLabel(name, colourOf("title", mainFg()), ["btop-title"]));
+    row.append(textLabel("├", border));
+    if (right) {
+      row.append(spacer());
+      row.append(textLabel(right, mainFg(), ["btop-value"]));
+    }
+    return hit(row, [boxKey, "title"], boxKey, ["title-hit"]);
+  }
+
+  function boxFor(
+    module: string,
+    boxKey: string,
+    titleName: string,
+    right: string | undefined,
+    children: readonly Gtk.Widget[],
+  ): Gtk.Box {
+    const box = new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL,
+      spacing: 1,
+      hexpand: true,
+      css_classes: ["btop-box", `box-${module}`],
+    });
+    box.append(titleControl(titleName, boxKey, right));
+    for (const child of children) box.append(child);
+    return box;
+  }
+
+  function columnBox(): Gtk.Box {
+    return new Gtk.Box({
+      orientation: Gtk.Orientation.VERTICAL,
+      spacing: 6,
+      hexpand: true,
+      css_classes: ["btop-column"],
+    });
+  }
+
+  function cpuOverviewBox(load: number, symbol: string): Gtk.Box {
+    const dim = colourOf("inactive_fg", "#8a9aa5");
+    const cpuKeys = ["cpu_start", "cpu_mid", "cpu_end", "meter_bg"];
+    const cpuPercent = Math.round(level(load));
+    return boxFor("cpu", "cpu_box", "cpu", "1.1 GHz", [
+      rowOf(
+        textLabel(`total ▾▲ ${symbol}`, colourOf("graph_text", mainFg())),
+        spacer(),
+        valueControl(`${cpuPercent}%`, mainFg(), "cpu_start", cpuKeys),
+      ),
+      rowOf(graph("cpu", 26, level(load), 0), graph("cpu", 13, level(load) * 0.72, 4, "graph_text")),
+      rowOf(
+        textLabel("up 08:54:01", dim),
+        spacer(),
+        valueControl("1.14 1.36 1.63", mainFg(), "main_fg", ["main_fg"]),
+      ),
+    ]);
+  }
+
+  function coreRow(index: number, percent: number): Gtk.Box {
+    const name = textLabel(`C${index}`, colourOf("inactive_fg", "#8a9aa5"), ["btop-core-name"]);
+    name.set_size_request(18, -1);
+    return rowOf(
+      name,
+      meter("cpu", percent, 7),
+      valueControl(
+        `${68 + (index % 2)}°C`,
+        colourOf("temp_end", mainFg()),
+        "temp_start",
+        ["temp_start", "temp_mid", "temp_end"],
+        ["btop-value", "btop-temp"],
+      ),
+    );
+  }
+
+  function cpuCoresBox(load: number): Gtk.Box {
+    const tempKeys = ["temp_start", "temp_mid", "temp_end"];
+    const cachedKeys = ["cached_start", "cached_mid", "cached_end"];
+    const cpuKeys = ["cpu_start", "cpu_mid", "cpu_end", "meter_bg"];
+    const left = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 1, hexpand: true });
+    const right = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 1, hexpand: true });
+    [2, 1, 3, 1, 11, 7, 9, 3].forEach((base, index) => {
+      (index < 4 ? left : right).append(coreRow(index, level(base)));
+    });
+    const cores = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 10, css_classes: ["btop-cores"] });
+    cores.append(left);
+    cores.append(right);
+    const cpuPercent = Math.round(level(load));
+    return boxFor("cpu", "cpu_box", "12th Gen i7-12650H", "1.1 GHz", [
+      rowOf(
+        textLabel("CPU", mainFg(), ["btop-lab"]),
+        leader(),
+        meter("cpu", level(load), 14),
+        valueControl(`${cpuPercent}%`, mainFg(), "cpu_start", cpuKeys),
+        valueControl("70°C", colourOf("temp_end", mainFg()), "temp_start", tempKeys),
+        valueControl("12.3W", colourOf("cached_end", mainFg()), "cached_start", cachedKeys),
+      ),
+      cores,
+      rowOf(
+        textLabel("Load avg:", mainFg(), ["btop-lab"]),
+        spacer(),
+        valueControl("1.14 1.36 1.63", mainFg(), "main_fg", ["main_fg"]),
+      ),
+      rowOf(
+        textLabel("GPU0", mainFg(), ["btop-lab"]),
+        leader(),
+        meter("cpu", level(0), 12),
+        textLabel("288M/6.0G", mainFg()),
+        spacer(),
+        valueControl("65°C 12.8W", colourOf("temp_end", mainFg()), "temp_start", tempKeys),
+      ),
+    ]);
+  }
+
+  function gpuBox(load: number): Gtk.Box {
+    const cpuKeys = ["cpu_start", "cpu_mid", "cpu_end", "meter_bg"];
+    const rows: Gtk.Widget[] = [];
+    for (const [name, base, watts] of [
+      ["GPU0", Math.max(0, load - 24), "12.8W"],
+      ["GPU1", Math.max(0, load - 32), ""],
+    ] as [string, number, string][]) {
+      const percent = Math.round(level(base));
+      rows.push(
+        rowOf(
+          textLabel(name, mainFg(), ["btop-lab"]),
+          leader(),
+          meter("cpu", level(base), 14),
+          valueControl(`${percent}%`, mainFg(), "cpu_start", cpuKeys),
+          watts
+            ? valueControl(
+                watts,
+                colourOf("cached_end", mainFg()),
+                "cached_start",
+                ["cached_start", "cached_mid", "cached_end"],
+              )
+            : spacer(),
+        ),
+      );
+    }
+    rows.push(
+      rowOf(
+        textLabel("VRAM", mainFg(), ["btop-lab"]),
+        leader(),
+        meter("used", level(42), 12),
+        valueControl("3.2G/6.0G", mainFg(), "used_start", [
+          "used_start",
+          "used_mid",
+          "used_end",
+          "meter_bg",
+        ]),
+      ),
+    );
+    rows.push(graph("cpu", 28, level(12), 2));
+    return boxFor("gpu", "mem_box", "gpu-totals", undefined, rows);
+  }
+
+  function memBox(load: number): Gtk.Box {
+    const usedPercent = level(load);
+    const availablePercent = level(Math.max(4, 96 - load));
+    const cachedPercent = level(Math.min(96, load + 18));
+    const freePercent = level(Math.max(3, 100 - load));
+    const total = 15.2;
+    return boxFor("mem", "mem_box", "mem", undefined, [
+      plainRow("Total", `${total.toFixed(1)} GiB`),
+      plainRow("Used", `${((total * usedPercent) / 100).toFixed(2)} GiB`),
+      meterRow("used", usedPercent, 16),
+      plainRow("Available", `${((total * availablePercent) / 100).toFixed(2)} GiB`),
+      meterRow("available", availablePercent, 16),
+      plainRow("Cached", `${((total * cachedPercent) / 100).toFixed(2)} GiB`),
+      meterRow("cached", cachedPercent, 16),
+      plainRow("Free", `${((total * freePercent) / 100).toFixed(2)} GiB`),
+      meterRow("free", freePercent, 16),
+    ]);
+  }
+
+  function netBox(load: number): Gtk.Box {
+    const dim = colourOf("inactive_fg", "#8a9aa5");
+    const selectedBg = colourOf("selected_bg", mainFg());
+    const graphText = colourOf("graph_text", mainFg());
+    const downloadKeys = ["download_start", "download_mid", "download_end", "meter_bg"];
+    const uploadKeys = ["upload_start", "upload_mid", "upload_end", "meter_bg"];
+    const tabs = rowOf(
+      textLabel("┤sync├┤auto├┤zero├", dim),
+      hit(textLabel("┤b├", selectedBg), ["selected_bg", "hi_fg"], "selected_bg", ["tab-hit"]),
+      textLabel("┤wlan0├", dim),
+    );
+    const subbox = (
+      name: string,
+      family: string,
+      speed: string,
+      total: string,
+      keys: readonly string[],
+    ): Gtk.Box => {
+      const sub = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 1,
+        css_classes: ["btop-subbox"],
+      });
+      sub.append(
+        hit(textLabel(name, colourOf("title", mainFg())), keys, `${family}_start`, ["title-hit"]),
+      );
+      sub.append(
+        rowOf(
+          textLabel(family === "download" ? "▼" : "▲", graphText),
+          valueControl(speed, mainFg(), `${family}_start`, keys),
+          spacer(),
+          valueControl(total, mainFg(), `${family}_start`, keys),
+        ),
+      );
+      sub.append(graph(family, 28, level(family === "download" ? 22 : 8), family === "download" ? 1 : 3));
+      return sub;
+    };
+    return boxFor("net", "net_box", "net 192.168.1.7", undefined, [
+      tabs,
+      graph("download", 30, level(22), 1),
+      subbox("download", "download", `${(18 * level(22) / 100).toFixed(1)} KiB/s`, "9.56 GiB", downloadKeys),
+      subbox("upload", "upload", `${Math.round((752 * level(8)) / 100)} KiB/s`, "4.67 GiB", uploadKeys),
+    ]);
+  }
+
+  function disksBox(load: number): Gtk.Box {
+    const usedKeys = ["used_start", "used_mid", "used_end", "meter_bg"];
+    const rows: Gtk.Widget[] = [];
+    for (const [name, base] of [
+      ["root", 20],
+      ["home", 14],
+      ["log", load],
+    ] as [string, number][]) {
+      const percent = Math.round(level(base));
+      rows.push(
+        rowOf(
+          textLabel(name, mainFg(), ["btop-lab"]),
+          leader(),
+          hit(
+            textLabel("IO%", colourOf("inactive_fg", "#8a9aa5")),
+            ["available_start", "available_mid", "available_end"],
+            "available_start",
+            ["tab-hit"],
+          ),
+          meter("available", level(4), 6),
+          valueControl("176 GiB", mainFg(), "main_fg", ["main_fg"]),
+        ),
+      );
+      rows.push(
+        rowOf(
+          valueControl(`Used: ${percent}%`, mainFg(), "used_start", usedKeys),
+          meter("used", percent, 14),
+          spacer(),
+          valueControl(`${(percent * 0.35).toFixed(1)} GiB`, mainFg(), "main_fg", ["main_fg"]),
+        ),
+      );
+    }
+    return boxFor("disks", "cpu_box", "disks", "io", rows);
+  }
+
+  function procBox(): Gtk.Box {
+    const dim = colourOf("inactive_fg", "#8a9aa5");
+    const hi = colourOf("hi_fg", colourOf("selected_bg", mainFg()));
+    const procMisc = colourOf("proc_misc", colourOf("selected_bg", mainFg()));
+    const processKeys = ["process_start", "process_mid", "process_end"];
+    const rows: Gtk.Widget[] = [];
+    rows.push(
+      hit(
+        rowOf(textLabel("pause per-core reverse tree cpu lazy", colourOf("selected_bg", mainFg()), ["btop-tabs"])),
+        ["selected_bg", "hi_fg"],
+        "selected_bg",
+        ["tab-hit"],
+      ),
+    );
+    const procCell = (text: string, colour: string, width: number): Gtk.Label => {
+      const label = textLabel(text, colour, ["btop-proc-cell"]);
+      label.set_size_request(width, -1);
+      return label;
+    };
+    rows.push(
+      hit(
+        procRow(
+          procCell("Pid:", hi, 24),
+          procCell("Program:", hi, 34),
+          procCell("Command:", hi, 38),
+          procCell("User:", hi, 20),
+          procCell("MemB", hi, 20),
+          procCell("Cpu%", hi, 16),
+        ),
+        ["hi_fg"],
+        "hi_fg",
+        ["tab-hit"],
+      ),
+    );
+    const procs = [
+      ["6897", "Hyprland", "Hyprland --watchdog -fd 4", "inumaki", 135, "0.4"],
+      ["1714088", "chrome", "--type=renderer --crashpad-h", "inumaki", 201, "0.0"],
+      ["13584", "opencode", "opencode", "inumaki", 373, "0.1"],
+      ["7096", "wireplumber", "/usr/bin/wireplumber", "inumaki", 24, "0.0"],
+      ["94079", "opencode", "opencode serve --service", "inumaki", 559, "0.2"],
+      ["12972", "kitty", "kitty", "inumaki", 92, "0.0"],
+    ] as [string, string, string, string, number, string][];
+    for (const [pid, program, command, user, memory, cpu] of procs) {
+      const commandLabel = textLabel(command, dim, ["btop-proc-cell", "btop-dim"]);
+      commandLabel.set_hexpand(true);
+      commandLabel.set_ellipsize(Pango.EllipsizeMode.END);
+      commandLabel.set_max_width_chars(7);
+      rows.push(
+        procRow(
+          procCell(pid, mainFg(), 24),
+          procCell(program, mainFg(), 32),
+          commandLabel,
+          procCell(user, dim, 20),
+          meter("process", level(Math.min(100, memory / 6)), 2),
+          procCell(`${memory}M`, mainFg(), 20),
+          valueControl(cpu, mainFg(), "process_start", processKeys, ["btop-value", "btop-proc-cell"]),
+        ),
+      );
+    }
+    const chip = (text: string, background: string, primary: string, keys: readonly string[]): Gtk.Button =>
+      hit(
+        textLabel(text, colourOf("proc_banner_fg", mainFg()), ["btop-chip", background]),
+        keys,
+        primary,
+        ["chip-hit"],
+      );
+    rows.push(
+      rowOf(
+        chip(" pause ", "chip-pause", "proc_pause_bg", ["proc_pause_bg", "proc_banner_fg"]),
+        chip(" Follow ", "chip-follow", "followed_bg", ["followed_bg", "followed_fg"]),
+        chip(" banner ", "chip-banner", "proc_banner_bg", ["proc_banner_bg", "proc_banner_fg"]),
+      ),
+    );
+    rows.push(
+      hit(
+        rowOf(
+          textLabel("− select", procMisc),
+          textLabel("⌂ info", procMisc),
+          textLabel("← terminal", procMisc),
+          spacer(),
+          valueControl("0/4412", procMisc, "proc_misc", ["proc_misc"]),
+        ),
+        ["proc_misc"],
+        "proc_misc",
+        ["proc-footer"],
+      ),
+    );
+    return boxFor("proc", "proc_box", "proc", undefined, rows);
+  }
+
+  function renderTopbar(boxes: readonly string[]): void {
+    clear(schematicTop);
+    const dim = colourOf("inactive_fg", "#8a9aa5");
+    const top = new Gtk.Box({
+      orientation: Gtk.Orientation.HORIZONTAL,
+      spacing: 6,
+      css_classes: ["btop-topbar-row"],
+    });
+    const title = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 3 });
+    title.append(textLabel("┤", borderOf("cpu_box")));
+    title.append(textLabel("cpu", colourOf("title", mainFg()), ["btop-title"]));
+    title.append(textLabel("├", borderOf("cpu_box")));
+    top.append(hit(title, ["cpu_box", "title"], "cpu_box", ["title-hit"]));
+    top.append(hit(textLabel("┤menu├┤preset├", dim), ["inactive_fg"], "inactive_fg", ["tab-hit"]));
+    top.append(spacer());
+    top.append(valueControl("16:51:14", mainFg(), "main_fg", ["main_fg"]));
+    top.append(hit(textLabel("▾ ▸", mainFg()), ["main_fg"], "main_fg", ["tab-hit"]));
+    if (boxes.includes("cpu")) {
+      const battery = rowOf(
+        textLabel(`BAT ${Math.round(level(100))}%`, colourOf("cpu_end", mainFg())),
+        meter("cpu", level(100), 4),
+      );
+      top.append(hit(battery, ["cpu_start", "cpu_mid", "cpu_end", "meter_bg"], "cpu_start", ["topbar-battery"]));
+    }
+    schematicTop.append(top);
+  }
+
   function renderSchematic(): void {
     clear(schematicGrid);
     const theme = current();
     const schematic = buildSchematic(conf(), preset(), selected());
     const active = theme.active ? " · active" : "";
-    schematicCap.set_label(`btop schematic — ${theme.name} (${theme.kind})${active} · ${schematic.caption.replace("btop schematic — ", "")}`);
+    schematicCap.set_label(
+      `btop schematic — ${theme.name} (${theme.kind})${active} · ${schematic.caption.replace("btop schematic — ", "")}`,
+    );
     const warning = hiddenModuleWarning(selected() ?? "", schematic.hiddenModules);
     schematicWarn.set_visible(warning !== null);
     schematicWarn.set_label(warning ? `⚠ ${warning}` : "");
-    for (const boxName of schematic.boxes) {
-      const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3, css_classes: ["bbox"] });
-      column.append(new Gtk.Label({ label: boxName.toUpperCase(), xalign: 0, css_classes: ["btitle"] }));
-      for (const element of schematic.elements.filter((e) => e.box === boxName)) {
-        const lit = highlight() && schematic.highlighted.includes(element.id);
-        column.append(
-          new Gtk.Label({
-            label: element.label,
-            xalign: 0,
-            wrap: true,
-            max_width_chars: 14,
-            css_classes: lit ? ["el", "hl"] : ["el"],
-          }),
-        );
-      }
-      schematicGrid.append(column);
+
+    // The load control (and a fixed-fill override) drives every meter and graph.
+    const loadLevel = meterFill(controls(), controls().load);
+    const presetLabel = presetAt(conf(), preset()).label;
+    const symbol = presetLabel.includes("block") ? "block" : presetLabel.includes("tty") ? "tty" : "default";
+    renderTopbar(schematic.boxes);
+
+    const columns = [columnBox(), columnBox(), columnBox()];
+    if (schematic.boxes.includes("cpu")) {
+      columns[0].append(cpuOverviewBox(loadLevel, symbol));
+      columns[1].append(cpuCoresBox(loadLevel));
     }
-    const background = backdropColour(controls(), resolveHex(effective()["main_bg"], palette()));
-    canvasProvider.load_from_string(fillRule(".canvas", background || "#101216"));
+    if (schematic.boxes.includes("gpu")) columns[0].append(gpuBox(loadLevel));
+    if (schematic.boxes.includes("mem")) columns[0].append(memBox(loadLevel));
+    if (schematic.boxes.includes("net")) columns[0].append(netBox(loadLevel));
+    if (schematic.boxes.includes("disks")) columns[1].append(disksBox(loadLevel));
+    if (schematic.boxes.includes("proc")) columns[2].append(procBox());
+    for (const column of columns) {
+      if (column.get_first_child()) schematicGrid.append(column);
+    }
+    // No text-only fallback: an empty preset still draws btop geometry.
+    if (!schematicGrid.get_first_child()) {
+      schematicGrid.append(
+        boxFor("cpu", "cpu_box", "no boxes in preset", undefined, [
+          graph("cpu", 32, 0, 0),
+          meter("used", 0, 16),
+        ]),
+      );
+    }
+
+    // Theme-derived chrome for the drawn tree. Box borders follow the key btop
+    // uses (cpu_box, mem_box, net_box, proc_box; gpu/disks reuse cpu/mem).
+    const background =
+      backdropColour(controls(), resolveHex(effective()["main_bg"], palette())) || "#101216";
+    const main = mainFg();
+    const divLine = colourOf("div_line", colourOf("inactive_fg", "#4b525d"));
+    const hiFg = colourOf("hi_fg", colourOf("selected_bg", "#6ea8fe"));
+    const chipFallback = rgbaHex(main, 0.14);
+    const css = [
+      fillRule(".canvas", background),
+      `.btop-frame { background-color: ${background}; color: ${main}; }`,
+      `.btop-box.box-cpu { border-color: ${borderOf("cpu_box")}; }`,
+      `.btop-box.box-gpu { border-color: ${borderOf("mem_box")}; }`,
+      `.btop-box.box-mem { border-color: ${borderOf("mem_box")}; }`,
+      `.btop-box.box-net { border-color: ${borderOf("net_box")}; }`,
+      `.btop-box.box-disks { border-color: ${borderOf("cpu_box")}; }`,
+      `.btop-box.box-proc { border-color: ${borderOf("proc_box")}; }`,
+      `.btop-subbox { border-color: ${borderOf("net_box")}; }`,
+      `.btop-topbar-row { border-bottom: 1px solid ${divLine}; }`,
+      `.leader-line { border-bottom: 1px dotted ${divLine}; }`,
+      `.key-hit.hl { border-color: ${hiFg}; background-color: ${rgbaHex(hiFg, 0.18)}; box-shadow: 0 0 0 2px ${rgbaHex(hiFg, 0.45)}; }`,
+      `.btop-chip.chip-pause { background-color: ${colourOf("proc_pause_bg", chipFallback)}; }`,
+      `.btop-chip.chip-follow { background-color: ${colourOf("followed_bg", chipFallback)}; }`,
+      `.btop-chip.chip-banner { background-color: ${colourOf("proc_banner_bg", chipFallback)}; }`,
+    ].join("\n");
+    canvasProvider.load_from_string(css);
 
     const key = selected();
     const raw = key ? (effective()[key] ?? "") : "";
-    const resolved = key ? resolveHex(raw, palette()) : "#ff00ff";
+    const resolved = key ? rawColour(key) : "#ff00ff";
     coverageTitle.set_label(`KEY COVERAGE — ${key ?? "—"}`);
-    coverageValue.set_label(key ? `${raw === "" ? "empty (transparent)" : raw}  →  ${resolved || "transparent"}` : "—");
+    coverageValue.set_label(
+      key ? `${raw === "" ? "empty (transparent)" : raw}  →  ${resolved || "transparent"}` : "—",
+    );
     coverageProvider.load_from_string(fillRule(".anat-swatch", resolved || "transparent"));
     clear(coverageChips);
     const paints = key ? modulesFor(key) : [];
@@ -949,22 +1591,14 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
       coverageChips.append(new Gtk.Label({ label: module, xalign: 0, css_classes: chips }));
     }
 
-    // A small sample meter keeps the load/fill controls live in Components
-    // without pretending to be btop's geometry; Live is the real capture.
+    // The key-coverage card keeps a second visible meter so the selected ramp
+    // and the current load are legible even when the chosen key is chrome.
     const family = key && /_(start|mid|end)$/.test(key) ? key.replace(/_(start|mid|end)$/, "") : "used";
-    const fill = meterFill(controls(), controls().load);
-    const start = resolveHex(effective()[`${family}_start`], palette()) || "#c2c2c5";
-    const end = resolveHex(effective()[`${family}_end`], palette()) || start;
-    const empty = resolveHex(effective()["meter_bg"], palette()) || "#333333";
-    const cells = 28;
-    const filled = Math.max(0, Math.min(cells, Math.round((cells * fill) / 100)));
-    let meter = "";
-    for (let i = 0; i < cells; i += 1) {
-      const colour = i < filled ? (i < filled / 2 ? start : end) : empty;
-      meter += `<span foreground="${colour}">█</span>`;
-    }
-    coverageMeterLabel.set_label(`sample ${family} meter · load ${fill}%`);
-    coverageMeter.set_markup(meter);
+    const band = meterBand(stopsOf(family), loadLevel, 28, meterBackground());
+    let sample = band.fill.map((colour) => colourSpan(colour, band.glyph)).join("");
+    for (let index = band.filled; index < 28; index += 1) sample += colourSpan(band.empty, band.emptyGlyph);
+    coverageMeterLabel.set_label(`sample ${family} meter · load ${Math.round(loadLevel)}%`);
+    coverageMeter.set_markup(sample);
   }
 
   function renderDiagnosis(): void {
@@ -1262,7 +1896,7 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
       anchor={Astal.WindowAnchor.NONE}
       layer={Astal.Layer.OVERLAY}
       keymode={Astal.Keymode.ON_DEMAND}
-      default_width={1400}
+      default_width={1700}
       default_height={900}
       $={(self) => {
         const keys = new Gtk.EventControllerKey();

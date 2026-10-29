@@ -354,3 +354,76 @@
 /* Sample meter in the key-coverage card (load/fill feedback in Components). */
 .coverage-meter-label { font-size: 9px; color: alpha(@color_foreground, 0.45); }
 .coverage-meter { font-family: monospace; font-size: 11px; }
+
+/* ── Components: graphical btop reconstruction (FIX-003) ──────────────────
+ * The stage shows the candidate btop theme, not the desktop palette. Colours
+ * for borders, meters and graphs are injected per render from the selected
+ * theme's resolved map (canvasProvider), so these rules are geometry only. */
+.btop-frame {
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: "JetBrainsMono Nerd Font", "Adwaita Mono", "DejaVu Sans Mono", monospace;
+  font-size: 11px;
+}
+.btop-topbar-row {
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+  font-size: 10px;
+}
+.btop-column { min-width: 0; }
+.btop-box {
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 2px 5px 4px;
+  background: alpha(#000000, 0.12);
+}
+.btop-row { min-height: 0; }
+.btop-text { font-size: 10.5px; }
+.btop-title { font-weight: 700; font-size: 11px; }
+.btop-value, .btop-lab { font-size: 10.5px; }
+.btop-graph {
+  font-family: "JetBrainsMono Nerd Font", "Adwaita Mono", "DejaVu Sans Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0;
+}
+.btop-meter {
+  font-family: "JetBrainsMono Nerd Font", "Adwaita Mono", "DejaVu Sans Mono", monospace;
+  font-size: 11px;
+}
+.btop-meter-bar { min-height: 14px; }
+.btop-core-name { font-size: 9.5px; }
+.btop-cores { padding: 1px 0; }
+.btop-tabs { font-size: 9.5px; }
+.btop-subbox {
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 2px 4px;
+  background: alpha(#000000, 0.10);
+}
+.btop-proc-cell { font-size: 9px; }
+.btop-chip {
+  font-size: 9px;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.btop-dim { opacity: 0.85; }
+.leader-line { min-height: 1px; margin-top: 7px; }
+.key-hit {
+  background: transparent;
+  background-image: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0 1px;
+  min-height: 0;
+  min-width: 0;
+  box-shadow: none;
+  text-shadow: none;
+}
+.key-hit:hover {
+  border-color: alpha(@color_foreground, 0.35);
+  background: alpha(@color_foreground, 0.05);
+}
+.meter-hit, .value-hit, .title-hit, .leader-hit, .tab-hit, .graph-hit, .chip-hit, .topbar-battery {
+  padding: 0;
+}
+

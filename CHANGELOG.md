@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.1.3 — 2026-10-29
+
+- Rebuild the **Components** pane as a real graphical btop reconstruction
+  instead of a label-only grid: cpu overview + cpu-core detail, gpu, mem, net,
+  disks and proc boxes with themed borders, `┤ title ├` headers, dotted
+  leaders, labels, values, gradient meter bars (`█`) and graph lines
+  (`▁▂▃▄▅▆▇█`).
+- Add pure `lib/schematic-graphics.ts` (gradient sampling, meter fill counts,
+  deterministic load-scaled graph levels) and lock it with
+  `tests/schematic-graphics.mjs`.
+- Resolve every drawn colour from the selected theme's effective map + palette
+  ramp: `cpu_box` / `mem_box` / `net_box` / `proc_box` borders, `title`,
+  `main_fg`, `inactive_fg`, `graph_text`, `div_line`, `hi_fg`, the gradient
+  families and `meter_bg`.
+- Wire the existing controls into the drawing: load / fixed fill drive every
+  meter and graph and the displayed percentages, preset chips select the box
+  set, and the backdrop toggle repaints the stage.
+- Make elements selectable: clicking a meter fill selects its gradient
+  `*_start` key, the empty meter selects `meter_bg`, a box header selects its
+  box key, and graphs/values/tabs/chips select the key they paint. Selection
+  drives the right rail, gradient/palette editor, pending diff and diagnosis;
+  the selected key's painted elements get a themed highlight.
+- Keep the real btop **Live** pane unchanged; `make live-tests` 11/11.
+- Widen the default window to 1700×900 so the three schematic columns and the
+  side rails fit without horizontal clipping.
+- Gates: `make gates` PASS (test / conformance 15/15 / drift / bundle /
+  typecheck 0 errors in-tree).
+
 ## v0.1.2 — 2026-10-28
 
 - Restore the **real btop live preview as the default center stage**; v0.1.1

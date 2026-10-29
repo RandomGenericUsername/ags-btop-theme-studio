@@ -96,7 +96,7 @@ types:
 test: platform-dev
 	@command -v node >/dev/null || { echo "FAIL: test: node is not on PATH" >&2; exit 1; }
 	@for suite in theme-keys btop-conf key-map key-widgets-verify theme-model \
-		schematic preview targets platform-consumption; do \
+		schematic preview schematic-graphics targets platform-consumption; do \
 		echo "==> test: node tests/$$suite.mjs"; \
 		node tests/$$suite.mjs || exit 1; \
 	done

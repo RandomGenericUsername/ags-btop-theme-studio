@@ -313,12 +313,47 @@ test("the real btop preview is the default stage and follows edits", () => {
   assert.match(window, /liveScroll\.get_vadjustment\(\)\.set_value\(0\)/);
 });
 
+test("the Components pane draws the graphical btop schematic", () => {
+  const window = readText("ui", "StudioWindow.tsx");
+  const css = readText("style.css");
+  const render = functionBody(window, "function renderSchematic(): void");
+  // The six btop box builders plus the cpu overview/cores pair and topbar.
+  for (const builder of [
+    "renderTopbar(",
+    "cpuOverviewBox(",
+    "cpuCoresBox(",
+    "gpuBox(",
+    "memBox(",
+    "netBox(",
+    "disksBox(",
+    "procBox(",
+  ]) {
+    assert.ok(render.includes(builder), `renderSchematic is missing ${builder}`);
+  }
+  // Meters, graph lines, theme colours and the preset box set are real.
+  assert.match(render, /buildSchematic\(/);
+  assert.match(render, /meterFill\(controls\(\), controls\(\)\.load\)/);
+  assert.match(render, /backdropColour\(/);
+  assert.match(window, /meterBand\(/);
+  assert.match(window, /graphLevels\(/);
+  assert.match(render, /canvasProvider\.load_from_string\(css\)/);
+  // Every drawn element is a button whose click selects its primary key.
+  assert.match(window, /button\.connect\("clicked", \(\) => setSelected\(primary\)\)/);
+  assert.match(window, /tooltip_text: `click → \$\{primary\}`/);
+  // The stage primitives exist in the stylesheet.
+  for (const rule of [".btop-frame", ".btop-box", ".btop-graph", ".btop-meter", ".btop-subbox", ".key-hit"]) {
+    assert.ok(css.includes(rule), `style.css is missing ${rule}`);
+  }
+});
+
 test("the app package keeps its tests, vendored sources and live engine", () => {
   for (const path of [
     "tests/unit.test.mjs",
     "tests/app-contract.test.mjs",
+    "tests/schematic-graphics.mjs",
     "tests/platform-consumption.mjs",
     "tests/key-widgets-verify.mjs",
+    "lib/schematic-graphics.ts",
     "tools/key_widgets.py",
     "tools/btop_draw.v1.4.7.cpp",
     "tools/btop_theme.cpp",
