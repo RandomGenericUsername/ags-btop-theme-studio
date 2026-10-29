@@ -13,7 +13,7 @@
 
 ## Bugs
 
-(none)
+- [FIX-001-visual-shell/ticket.md](./FIX-001-visual-shell/ticket.md) — Align the Studio shell with mock v8 | `done` | links: none
 
 ## Ops tasks
 
