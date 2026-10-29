@@ -15,6 +15,7 @@
 
 - [FIX-001-visual-shell/ticket.md](./FIX-001-visual-shell/ticket.md) — Align the Studio shell with mock v8 | `done` | links: none
 - [FIX-002-runtime-preview/ticket.md](./FIX-002-runtime-preview/ticket.md) — Keep the real btop preview as the default stage | `done` | links: none
+- [FIX-003-graphical-schematic/ticket.md](./FIX-003-graphical-schematic/ticket.md) — Render a real graphical btop schematic in Components | `done` | links: none
 
 ## Ops tasks
 
