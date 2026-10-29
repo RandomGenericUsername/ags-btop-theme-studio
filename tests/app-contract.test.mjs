@@ -256,6 +256,51 @@ test("the platform template gate passes for this repo", () => {
   assert.equal(report.ok, true, formatAppConformanceReport(report, ROOT));
 });
 
+test("the studio shell keeps the mock-v8 three-column hierarchy", () => {
+  const window = readText("ui", "StudioWindow.tsx");
+  const css = readText("style.css");
+  // Regions: header strip, left rail, center stage, right rail.
+  for (const region of [
+    "studio-header",
+    "studio-left-scroll",
+    "studio-center",
+    "studio-right",
+    "studio-body",
+    "section-title",
+    "studio-path",
+    "studio-lib",
+    "diagPanel",
+    "diffPanel",
+    "picker",
+    "footer",
+  ]) {
+    assert.ok(window.includes(region), `window is missing the ${region} region`);
+  }
+  // The real live preview stays the Live pane of the stage.
+  assert.match(window, /live\/btop_live\.py/);
+  assert.match(window, /function refreshLive\(/);
+  assert.match(window, /label: "Components"/);
+  assert.match(window, /label: "Live"/);
+  // The shell chrome is declared in the stylesheet.
+  for (const rule of [
+    ".studio-header",
+    ".studio-left-scroll",
+    ".studio-center",
+    ".studio-right",
+    ".section-title",
+    ".studio-path",
+    ".canvas-bar",
+    ".pbar",
+    ".banner",
+    ".canvas",
+    ".diag",
+    ".diff",
+    ".footer",
+  ]) {
+    assert.ok(css.includes(rule), `style.css is missing ${rule}`);
+  }
+});
+
 test("the app package keeps its tests, vendored sources and live engine", () => {
   for (const path of [
     "tests/unit.test.mjs",

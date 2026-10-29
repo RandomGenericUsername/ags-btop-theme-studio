@@ -5,11 +5,13 @@ import { execAsync } from "ags/process";
 import {
   DEFAULT_CONTROLS,
   FIXED_FILL_LEVELS,
+  backdropColour,
   type PreviewControls,
 } from "../lib/preview";
 import { parseBtopConf, presetAt } from "../lib/btop-conf";
 import { buildSchematic, hiddenModuleWarning } from "../lib/schematic";
 import { KEY_GROUPS, NAMED_TOKENS } from "../lib/theme-keys";
+import { KEY_WIDGET_MAP, isUnreferenced, modulesFor, sitesFor } from "../lib/key-map";
 import {
   GRADIENT_LIMIT_NOTE,
   type Palette,
@@ -76,6 +78,11 @@ function configHome(): string {
   return GLib.getenv("XDG_CONFIG_HOME") || `${GLib.get_home_dir()}/.config`;
 }
 
+function confSourcePath(): string {
+  const spine = `${installDir()}/config/btop/btop.conf`;
+  return readFile(spine) !== null ? spine : `${configHome()}/btop/btop.conf`;
+}
+
 function loadConfText(): string {
   return (
     readFile(`${installDir()}/config/btop/btop.conf`) ??
@@ -112,6 +119,11 @@ function initialLibrary(): Theme[] {
   ];
 }
 
+/** A single CSS rule string with the colour literal escaped from the palette. */
+function fillRule(selector: string, hex: string): string {
+  return `${selector} { background-color: ${hex || "transparent"}; }`;
+}
+
 // ── the window ──────────────────────────────────────────────────────────────
 
 /**
@@ -125,6 +137,9 @@ let refreshPalette: (() => void) | null = null;
 export function refreshStudioPalette(): void {
   refreshPalette?.();
 }
+
+const LIVE_PLACEHOLDER = "Live preview not rendered yet — press “Refresh live preview”.";
+const RAMP_SWATCH_MAX = 32;
 
 export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   const [confText] = createState(loadConfText());
@@ -242,40 +257,152 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   // a light surface, so the studio keeps the DIRECT path -- presenting first
   // and deferring this work would add a controller, a signature and an idle
   // tick (plus a createRoot lifetime for the effects) to buy single-digit ms.
-  const root = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, css_classes: ["studio-root"], hexpand: true, vexpand: true });
-  const left = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["studio-left"], spacing: 6 });
-  const center = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["studio-center"], spacing: 6, hexpand: true, vexpand: true });
-  const right = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["studio-right"], spacing: 6 });
-  root.append(left);
-  root.append(center);
-  root.append(right);
+  const shell = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    css_classes: ["studio-shell"],
+    hexpand: true,
+    vexpand: true,
+  });
 
-  // Left: save target + library + key tree.
-  const targetRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4 });
-  const repoBtn = new Gtk.Button({ label: "Repo", css_classes: ["toggle"] });
-  const instBtn = new Gtk.Button({ label: "Installed", css_classes: ["toggle"] });
+  // Header / intro strip (mock v8 `.note`).
+  const header = new Gtk.Box({
+    orientation: Gtk.Orientation.HORIZONTAL,
+    spacing: 10,
+    css_classes: ["studio-header"],
+  });
+  header.append(new Gtk.Label({ label: "btop Theme Studio", xalign: 0, css_classes: ["studio-title"] }));
+  header.append(
+    new Gtk.Label({
+      label: "Author a theme against your real btop config — edit on Components, verify on Live.",
+      xalign: 0,
+      hexpand: true,
+      css_classes: ["studio-subtitle"],
+    }),
+  );
+  header.append(
+    new Gtk.Label({
+      label: "48 keys · real btop on a pty · Esc closes",
+      xalign: 1,
+      css_classes: ["studio-subtitle"],
+    }),
+  );
+  shell.append(header);
+
+  const root = new Gtk.Box({
+    orientation: Gtk.Orientation.HORIZONTAL,
+    css_classes: ["studio-root"],
+    hexpand: true,
+    vexpand: true,
+  });
+  shell.append(root);
+
+  // ── shared section chrome ────────────────────────────────────────────────
+  function section(title: string, sub?: string): Gtk.Box {
+    const box = new Gtk.Box({
+      orientation: Gtk.Orientation.HORIZONTAL,
+      spacing: 6,
+      css_classes: ["section-header"],
+    });
+    box.append(new Gtk.Label({ label: title.toUpperCase(), xalign: 0, css_classes: ["section-title"] }));
+    if (sub) {
+      box.append(new Gtk.Label({ label: sub, xalign: 0, hexpand: true, css_classes: ["section-sub"] }));
+    }
+    return box;
+  }
+
+  function body(): Gtk.Box {
+    return new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, css_classes: ["studio-body"] });
+  }
+
+  function field(label: string, value: Gtk.Label): Gtk.Box {
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 });
+    box.append(new Gtk.Label({ label, xalign: 0, css_classes: ["field-label"] }));
+    box.append(value);
+    return box;
+  }
+
+  // ── left rail ────────────────────────────────────────────────────────────
+  const leftScroll = new Gtk.ScrolledWindow({
+    vexpand: true,
+    hscrollbar_policy: Gtk.PolicyType.NEVER,
+    css_classes: ["studio-left-scroll"],
+  });
+  const left = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["studio-left"] });
+  leftScroll.set_child(left);
+  root.append(leftScroll);
+
+  // Save target.
+  const targetRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6, css_classes: ["target-row"] });
+  const repoBtn = new Gtk.Button({ label: "Repo", css_classes: ["toggle"], hexpand: true });
+  const instBtn = new Gtk.Button({ label: "Installed", css_classes: ["toggle"], hexpand: true });
   repoBtn.connect("clicked", () => setTarget("repo"));
   instBtn.connect("clicked", () => setTarget("installed"));
   targetRow.append(repoBtn);
   targetRow.append(instBtn);
-  const targetPath = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["path"] });
+  const targetLabel = new Gtk.Label({ label: "writes to — repo", xalign: 0, css_classes: ["field-label"] });
+  const targetPath = new Gtk.Label({
+    xalign: 0,
+    wrap: true,
+    css_classes: ["studio-path", "rw"],
+  });
   const targetHintLabel = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["hint"] });
   const caveat = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["warn"] });
-  left.append(new Gtk.Label({ label: "Save target", xalign: 0, css_classes: ["h2"] }));
-  left.append(targetRow);
-  left.append(targetPath);
-  left.append(targetHintLabel);
-  left.append(caveat);
 
-  const libBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, css_classes: ["lib"] });
-  left.append(new Gtk.Label({ label: "Themes — ★ = used by btop", xalign: 0, css_classes: ["h2"] }));
-  left.append(libBox);
-  const libActions = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4 });
-  const newBtn = new Gtk.Button({ label: "+ New", css_classes: ["toggle"] });
-  const dupBtn = new Gtk.Button({ label: "Duplicate", css_classes: ["toggle"] });
-  const forkBtn = new Gtk.Button({ label: "Fork", css_classes: ["toggle"] });
-  const delBtn = new Gtk.Button({ label: "Delete", css_classes: ["toggle"] });
-  const activeBtn = new Gtk.Button({ label: "★ Active", css_classes: ["toggle"] });
+  left.append(section("Save target"));
+  const targetBody = body();
+  targetBody.append(targetRow);
+  targetBody.append(targetLabel);
+  targetBody.append(targetPath);
+  targetBody.append(targetHintLabel);
+  targetBody.append(caveat);
+  left.append(targetBody);
+
+  // Read-only inputs.
+  const palettePath = new Gtk.Label({
+    label: `${stateHome()}/dotfiles/current/colors.yaml`,
+    xalign: 0,
+    wrap: true,
+    css_classes: ["studio-path"],
+  });
+  const generatedPath = new Gtk.Label({
+    label: `${stateHome()}/dotfiles/current/colors.btop.theme`,
+    xalign: 0,
+    wrap: true,
+    css_classes: ["studio-path"],
+  });
+  const confPath = new Gtk.Label({
+    label: confSourcePath(),
+    xalign: 0,
+    wrap: true,
+    css_classes: ["studio-path"],
+  });
+  left.append(section("Inputs", "— read-only"));
+  const inputsBody = body();
+  inputsBody.append(field("Palette", palettePath));
+  inputsBody.append(field("Generated theme (derived)", generatedPath));
+  inputsBody.append(field("btop config (consumed)", confPath));
+  left.append(inputsBody);
+
+  // Consumed btop.conf.
+  const cfgLabel = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["studio-cfg"] });
+  left.append(section("Consumed from btop.conf"));
+  const cfgBody = body();
+  cfgBody.append(cfgLabel);
+  left.append(cfgBody);
+
+  // Theme library.
+  const libBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, css_classes: ["studio-lib"] });
+  left.append(section("Themes", "— ★ = used by btop"));
+  const libBody = body();
+  libBody.append(libBox);
+  left.append(libBody);
+
+  const libActions = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6, css_classes: ["lib-actions"] });
+  const newBtn = new Gtk.Button({ label: "+ New", css_classes: ["toggle"], hexpand: true });
+  const dupBtn = new Gtk.Button({ label: "Duplicate", css_classes: ["toggle"], hexpand: true });
+  const forkBtn = new Gtk.Button({ label: "Fork", css_classes: ["toggle"], hexpand: true });
+  const delBtn = new Gtk.Button({ label: "Delete", css_classes: ["toggle"], hexpand: true });
+  const activeBtn = new Gtk.Button({ label: "★ Active", css_classes: ["toggle"], hexpand: true });
   newBtn.connect("clicked", newTheme);
   dupBtn.connect("clicked", duplicate);
   forkBtn.connect("clicked", fork);
@@ -284,64 +411,208 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   for (const button of [newBtn, dupBtn, forkBtn, delBtn, activeBtn]) libActions.append(button);
   left.append(libActions);
 
-  const treeScroll = new Gtk.ScrolledWindow({ vexpand: true, hscrollbar_policy: Gtk.PolicyType.NEVER });
-  const tree = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 1, css_classes: ["tree"] });
-  treeScroll.set_child(tree);
-  left.append(new Gtk.Label({ label: "Keys — all 48", xalign: 0, css_classes: ["h2"] }));
-  left.append(treeScroll);
+  const stockNote = new Gtk.Label({
+    label: "Stock btop themes stay available in /usr/share/btop/themes; the studio only edits what it owns.",
+    xalign: 0,
+    wrap: true,
+    css_classes: ["stock-note"],
+  });
+  left.append(stockNote);
 
-  // Center: preset chips, controls, schematic, diagnosis, diff.
-  const presetBar = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4, css_classes: ["pbar"] });
-  const controlsBar = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6, css_classes: ["canvas-bar"] });
-  const loadScale = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, adjustment: new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 5 }) });
+  // Key list.
+  const keysFor = new Gtk.Label({ xalign: 0, hexpand: true, css_classes: ["section-sub"] });
+  const keysHeader = new Gtk.Box({
+    orientation: Gtk.Orientation.HORIZONTAL,
+    spacing: 6,
+    css_classes: ["section-header"],
+  });
+  keysHeader.append(new Gtk.Label({ label: "KEYS", xalign: 0, css_classes: ["section-title"] }));
+  keysHeader.append(keysFor);
+  const tree = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 1, css_classes: ["tree"] });
+  left.append(keysHeader);
+  left.append(tree);
+
+  // ── center stage ─────────────────────────────────────────────────────────
+  const center = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    css_classes: ["studio-center"],
+    hexpand: true,
+    vexpand: true,
+  });
+  root.append(center);
+
+  // Controls bar (load + fixed fill + tabs + preview toggles).
+  const controlsBar = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 6,
+    css_classes: ["canvas-bar"],
+  });
+  const controlRow1 = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 });
+  const controlRow2 = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 });
+  const loadLabel = new Gtk.Label({ label: "load", xalign: 0, css_classes: ["slider-label"] });
+  const loadScale = new Gtk.Scale({
+    orientation: Gtk.Orientation.HORIZONTAL,
+    adjustment: new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 5 }),
+    css_classes: ["load-scale"],
+  });
   loadScale.set_value(DEFAULT_CONTROLS.load);
   loadScale.set_size_request(120, -1);
-  loadScale.connect("value-changed", () => setControls({ ...controls(), load: Math.round(loadScale.get_value()), fixedFill: null }));
+  const loadPct = new Gtk.Label({ label: `${DEFAULT_CONTROLS.load}%`, xalign: 0, css_classes: ["slider-value"] });
+  loadScale.connect("value-changed", () => {
+    const value = Math.round(loadScale.get_value());
+    loadPct.set_label(`${value}%`);
+    setControls({ ...controls(), load: value, fixedFill: null });
+  });
   const fillButtons: Gtk.Button[] = [];
+  const fillLabel = new Gtk.Label({ label: "fill", xalign: 0, css_classes: ["slider-label"] });
   for (const level of FIXED_FILL_LEVELS) {
     const button = new Gtk.Button({ label: `${level}%`, css_classes: ["toggle"] });
     button.connect("clicked", () => setControls({ ...controls(), fixedFill: level }));
     fillButtons.push(button);
-    controlsBar.append(button);
   }
+  const compBtn = new Gtk.Button({ label: "Components", css_classes: ["toggle", "on"] });
+  const liveBtn = new Gtk.Button({ label: "Live", css_classes: ["toggle"] });
   const backdropBtn = new Gtk.Button({ label: "Neutral bg", css_classes: ["toggle"] });
-  backdropBtn.connect("clicked", () => setControls({ ...controls(), backdrop: controls().backdrop === "theme" ? "neutral" : "theme" }));
   const highlightBtn = new Gtk.Button({ label: "Highlight", css_classes: ["toggle", "on"] });
-  highlightBtn.connect("clicked", () => setHighlight(!highlight()));
-  const reserveBtn = new Gtk.Button({ label: "Reserve surface for meters", css_classes: ["toggle"] });
+  const reserveBtn = new Gtk.Button({ label: "Reserve surface", css_classes: ["toggle"] });
   const transparentBtn = new Gtk.Button({ label: "Transparent meters", css_classes: ["toggle"] });
+  backdropBtn.connect("clicked", () =>
+    setControls({ ...controls(), backdrop: controls().backdrop === "theme" ? "neutral" : "theme" }),
+  );
+  highlightBtn.connect("clicked", () => setHighlight(!highlight()));
   reserveBtn.connect("clicked", () => applyFix("reserve"));
   transparentBtn.connect("clicked", () => applyFix("transparent"));
-  controlsBar.append(new Gtk.Label({ label: "load" }));
-  controlsBar.append(loadScale);
-  controlsBar.append(backdropBtn);
-  controlsBar.append(highlightBtn);
-  controlsBar.append(reserveBtn);
-  controlsBar.append(transparentBtn);
-  center.append(presetBar);
+  const fillGroup = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4 });
+  fillGroup.append(fillLabel);
+  for (const button of fillButtons) fillGroup.append(button);
+  controlRow1.append(loadLabel);
+  controlRow1.append(loadScale);
+  controlRow1.append(loadPct);
+  controlRow1.append(fillGroup);
+  controlRow2.append(compBtn);
+  controlRow2.append(liveBtn);
+  controlRow2.append(backdropBtn);
+  controlRow2.append(highlightBtn);
+  controlRow2.append(reserveBtn);
+  controlRow2.append(transparentBtn);
+  controlsBar.append(controlRow1);
+  controlsBar.append(controlRow2);
   center.append(controlsBar);
-  const canvas = new Gtk.ScrolledWindow({ vexpand: true, hexpand: true });
-  const canvasInner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, css_classes: ["canvas"] });
-  canvas.set_child(canvasInner);
-  center.append(canvas);
-  const diag = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["diag"] });
-  const diff = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["diff"] });
-  center.append(diag);
-  center.append(diff);
 
-  // Live preview — the REAL btop binary. The shipped app reuses the tested
-  // pty + terminal-emulator engine (live/btop_live.py) rather than embedding
-  // VTE: behaviorally identical per the `btop-live-preview` spec, and it keeps
-  // the one preview implementation that has fixture/SIGUSR2/side-effect tests.
-  const liveBar = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6 });
-  const liveBtn = new Gtk.Button({ label: "Refresh live preview (real btop)", css_classes: ["toggle"] });
-  const liveLabel = new Gtk.Label({ xalign: 0, css_classes: ["live"] });
-  liveBar.append(liveBtn);
-  center.append(liveBar);
-  const liveScroll = new Gtk.ScrolledWindow({ vexpand: true, hexpand: true });
-  const liveFrame = new Gtk.Label({ xalign: 0, css_classes: ["live-frame"] });
-  liveScroll.set_child(liveFrame);
-  center.append(liveScroll);
+  // Preset chips.
+  const presetBar = new Gtk.Box({
+    orientation: Gtk.Orientation.HORIZONTAL,
+    spacing: 6,
+    css_classes: ["pbar"],
+  });
+  center.append(presetBar);
+
+  // Generated-theme banner (fork affordance is the existing fork action).
+  const banner = new Gtk.Box({
+    orientation: Gtk.Orientation.HORIZONTAL,
+    spacing: 8,
+    css_classes: ["banner"],
+    visible: false,
+  });
+  const bannerText = new Gtk.Label({ xalign: 0, wrap: true, hexpand: true, css_classes: ["banner-text"] });
+  const bannerFork = new Gtk.Button({ label: "Fork to edit", css_classes: ["toggle"] });
+  bannerFork.connect("clicked", fork);
+  banner.append(new Gtk.Label({ label: "ⓘ", xalign: 0, css_classes: ["banner-icon"] }));
+  banner.append(bannerText);
+  banner.append(bannerFork);
+  center.append(banner);
+
+  // Canvas: Components (schematic) | Live (real btop).
+  const canvasScroll = new Gtk.ScrolledWindow({
+    vexpand: true,
+    hexpand: true,
+    hscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+    vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+  });
+  const canvas = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, css_classes: ["canvas"] });
+  const canvasProvider = new Gtk.CssProvider();
+  canvas.get_style_context().add_provider(canvasProvider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+  canvasScroll.set_child(canvas);
+
+  const componentsPane = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, css_classes: ["stage"] });
+  const schematicCap = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["stage-cap"] });
+  const schematicWarn = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["warn"] });
+  const schematicGrid = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, css_classes: ["bgrid"] });
+  componentsPane.append(schematicCap);
+  componentsPane.append(schematicWarn);
+  componentsPane.append(schematicGrid);
+  const coverage = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, css_classes: ["anat"] });
+  const coverageTitle = new Gtk.Label({ xalign: 0, css_classes: ["anat-title"] });
+  const coverageRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 });
+  const coverageSwatch = new Gtk.Box({ css_classes: ["anat-swatch"] });
+  const coverageProvider = new Gtk.CssProvider();
+  coverageSwatch.get_style_context().add_provider(coverageProvider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+  const coverageValue = new Gtk.Label({ xalign: 0, hexpand: true, css_classes: ["ph"] });
+  coverageRow.append(coverageSwatch);
+  coverageRow.append(coverageValue);
+  const coverageChips = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 5 });
+  const coverageNote = new Gtk.Label({
+    label: "lit = shown in the current preset; faint = this key paints it but the box is OFF",
+    xalign: 0,
+    wrap: true,
+    css_classes: ["hint"],
+  });
+  coverage.append(coverageTitle);
+  coverage.append(coverageRow);
+  coverage.append(coverageChips);
+  coverage.append(coverageNote);
+  componentsPane.append(coverage);
+  canvas.append(componentsPane);
+
+  const livePane = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, css_classes: ["stage"], visible: false });
+  const liveCap = new Gtk.Label({
+    label: "Live — the real btop binary on a pty (a fresh capture per refresh)",
+    xalign: 0,
+    wrap: true,
+    css_classes: ["stage-cap"],
+  });
+  const liveBar = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, css_classes: ["live-bar"] });
+  const liveBtnRefresh = new Gtk.Button({ label: "Refresh live preview (real btop)", css_classes: ["toggle"] });
+  const liveStatus = new Gtk.Label({ xalign: 0, hexpand: true, css_classes: ["hint"] });
+  liveBar.append(liveBtnRefresh);
+  liveBar.append(liveStatus);
+  const liveFrame = new Gtk.Label({ label: LIVE_PLACEHOLDER, xalign: 0, css_classes: ["live-frame"] });
+  livePane.append(liveCap);
+  livePane.append(liveBar);
+  livePane.append(liveFrame);
+  canvas.append(livePane);
+
+  let livePaneActive = false;
+  function showPane(live: boolean): void {
+    livePaneActive = live;
+    componentsPane.set_visible(!live);
+    livePane.set_visible(live);
+    compBtn.set_css_classes(live ? ["toggle"] : ["toggle", "on"]);
+    liveBtn.set_css_classes(live ? ["toggle", "on"] : ["toggle"]);
+    if (live && liveFrame.get_label() === LIVE_PLACEHOLDER) refreshLive();
+  }
+  compBtn.connect("clicked", () => showPane(false));
+  liveBtn.connect("clicked", () => showPane(true));
+
+  center.append(canvasScroll);
+
+  // Diagnosis rows.
+  const diagPanel = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, css_classes: ["diag"] });
+  center.append(diagPanel);
+
+  // Pending-edit diff.
+  const diffPanel = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3, css_classes: ["diff"] });
+  const diffTitle = new Gtk.Label({
+    label: "PENDING EDITS — nothing written until you save",
+    xalign: 0,
+    css_classes: ["diff-title"],
+  });
+  const diffPath = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["diff-file"] });
+  const diffRows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 1, css_classes: ["diff-rows"] });
+  diffPanel.append(diffTitle);
+  diffPanel.append(diffPath);
+  diffPanel.append(diffRows);
+  center.append(diffPanel);
 
   function refreshLive(): void {
     const theme = current();
@@ -349,53 +620,120 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
     writeFile(tmp, serializeTheme(effective()));
     const engine = `${GLib.get_current_dir()}/live/btop_live.py`;
     const cmd = `uv run --with pyte python3 ${engine} --theme ${tmp} --once`;
-    liveBtn.set_label("Rendering real btop…");
+    liveBtnRefresh.set_label("Rendering real btop…");
+    liveStatus.set_label("Rendering the real btop binary…");
     void execAsync(["bash", "-lc", cmd])
       .then((out: string) => {
         try {
           const parsed = JSON.parse(out) as { frame_text?: string };
           liveFrame.set_label(parsed.frame_text ?? "(empty frame)");
+          liveStatus.set_label(`Rendered ${theme.name} with live btop.`);
           setStatus(`Live preview rendered by the real btop binary (${theme.name}).`);
         } catch {
           liveFrame.set_label(out);
+          liveStatus.set_label("Rendered with live btop.");
         }
       })
       .catch((error: unknown) => {
         liveFrame.set_label(`Live preview failed: ${error}`);
+        liveStatus.set_label("Live preview failed — check uv, pyte and btop.");
       })
-      .finally(() => liveBtn.set_label("Refresh live preview (real btop)"));
+      .finally(() => liveBtnRefresh.set_label("Refresh live preview (real btop)"));
   }
-  liveBtn.connect("clicked", refreshLive);
+  liveBtnRefresh.connect("clicked", refreshLive);
 
-  // Right: selection, gradient, picker, scope, footer.
-  const selInfo = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["hint"] });
-  const gradBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 });
-  const picker = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, css_classes: ["picker"] });
-  const scopeRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4 });
+  // ── right rail ───────────────────────────────────────────────────────────
+  const right = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["studio-right"] });
+  const rightScroll = new Gtk.ScrolledWindow({
+    vexpand: true,
+    hexpand: true,
+    hscrollbar_policy: Gtk.PolicyType.NEVER,
+  });
+  const rightContent = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    css_classes: ["studio-right-content"],
+  });
+  rightScroll.set_child(rightContent);
+  right.append(rightScroll);
+  root.append(right);
+
+  // Selection key/value rows.
+  function kvRow(label: string): [Gtk.Box, Gtk.Label] {
+    const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, css_classes: ["kv"] });
+    row.append(new Gtk.Label({ label, xalign: 0, css_classes: ["kv-label"] }));
+    const value = new Gtk.Label({ label: "—", xalign: 1, hexpand: true, wrap: true, css_classes: ["kv-value"] });
+    row.append(value);
+    return [row, value];
+  }
+  const [themeRow, selTheme] = kvRow("Theme");
+  const [keyRow, selKey] = kvRow("Theme key");
+  const [feedRow, selFeedLabel] = kvRow("Draws from");
+  const [valueRow, selValue] = kvRow("Value");
+  const [resolvedRow, selResolved] = kvRow("Resolved");
+  rightContent.append(section("Selection"));
+  const selectionBody = body();
+  selectionBody.append(themeRow);
+  selectionBody.append(keyRow);
+  selectionBody.append(feedRow);
+  selectionBody.append(valueRow);
+  selectionBody.append(resolvedRow);
+  rightContent.append(selectionBody);
+
+  // Where it shows.
+  const whereLabel = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["where-label"] });
+  const sitesLabel = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["sites"] });
+  rightContent.append(section("Where it shows", "— from btop_draw.cpp"));
+  const whereBody = body();
+  whereBody.append(whereLabel);
+  whereBody.append(sitesLabel);
+  rightContent.append(whereBody);
+
+  // Gradient.
+  const gradBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3, css_classes: ["studio-body", "grad"] });
+  const gradHeader = section("Gradient", "— btop allows max 3 stops");
+  rightContent.append(gradHeader);
+  rightContent.append(gradBox);
+
+  // Palette picker.
+  const picker = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, css_classes: ["studio-body", "picker"] });
+  rightContent.append(section("Palette", "— ramp · color0–15 · named"));
+  rightContent.append(picker);
+
+  // Edit scope.
+  const scopeRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6, css_classes: ["scope-row"] });
   const scopeButtons = new Map<Scope, Gtk.Button>();
   for (const [value, label] of [["key", "This key"], ["role", "Same role"], ["all", "All keys"]] as [Scope, string][]) {
-    const button = new Gtk.Button({ label, css_classes: ["toggle"] });
+    const button = new Gtk.Button({ label, css_classes: ["toggle"], hexpand: true });
     button.connect("clicked", () => setScope(value));
     scopeButtons.set(value, button);
     scopeRow.append(button);
   }
-  const statusLabel = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["status"] });
-  const footer = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6 });
-  const revertBtn = new Gtk.Button({ label: "Revert", css_classes: ["btn"] });
+  const scopeHint = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["warn"] });
+  const semantics = new Gtk.Label({
+    label:
+      "Generated themes resolve through the theme map and follow the wallpaper; authored themes hold literal colours. " +
+      "btop uses the ★ active theme by filename and reloads live (SIGUSR2).",
+    xalign: 0,
+    wrap: true,
+    css_classes: ["hint"],
+  });
+  rightContent.append(section("Edit scope"));
+  const scopeBody = body();
+  scopeBody.append(scopeRow);
+  scopeBody.append(scopeHint);
+  scopeBody.append(semantics);
+  rightContent.append(scopeBody);
+
+  // Status + footer.
+  const statusLabel = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["status", "studio-status"] });
+  rightContent.append(statusLabel);
+  const footer = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, css_classes: ["footer"] });
+  const revertBtn = new Gtk.Button({ label: "Revert", css_classes: ["btn"], hexpand: true });
   const saveBtn = new Gtk.Button({ label: "Save", css_classes: ["btn", "primary"], hexpand: true });
   revertBtn.connect("clicked", () => setPending(new Map()));
   saveBtn.connect("clicked", save);
   footer.append(revertBtn);
   footer.append(saveBtn);
-  right.append(new Gtk.Label({ label: "Selection", xalign: 0, css_classes: ["h2"] }));
-  right.append(selInfo);
-  right.append(new Gtk.Label({ label: `Gradient — ${GRADIENT_LIMIT_NOTE}`, xalign: 0, wrap: true, css_classes: ["h2"] }));
-  right.append(gradBox);
-  right.append(new Gtk.Label({ label: "Palette", xalign: 0, css_classes: ["h2"] }));
-  right.append(picker);
-  right.append(new Gtk.Label({ label: "Edit scope", xalign: 0, css_classes: ["h2"] }));
-  right.append(scopeRow);
-  right.append(statusLabel);
   right.append(footer);
 
   // ── renders ──────────────────────────────────────────────────────────────
@@ -410,10 +748,22 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
 
   function renderTree(): void {
     clear(tree);
+    const map = effective();
+    const currentKey = selected();
     for (const group of KEY_GROUPS) {
-      tree.append(new Gtk.Label({ label: group.name, xalign: 0, css_classes: ["group"] }));
+      tree.append(new Gtk.Label({ label: group.name.toUpperCase(), xalign: 0, css_classes: ["group"] }));
       for (const key of group.keys) {
-        const button = new Gtk.Button({ label: key, css_classes: ["item"] });
+        const hex = resolveHex(map[key], palette()) || "transparent";
+        const dotClass = `dot-${key}`;
+        const dot = new Gtk.Box({ css_classes: ["dot", dotClass] });
+        const dotProvider = new Gtk.CssProvider();
+        dotProvider.load_from_string(fillRule(`.${dotClass}`, hex));
+        dot.get_style_context().add_provider(dotProvider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+        const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 });
+        row.append(dot);
+        row.append(new Gtk.Label({ label: key, xalign: 0, hexpand: true, css_classes: ["key-label"] }));
+        const button = new Gtk.Button({ css_classes: key === currentKey ? ["item", "active"] : ["item"] });
+        button.set_child(row);
         button.connect("clicked", () => setSelected(key));
         tree.append(button);
       }
@@ -422,21 +772,49 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
 
   function renderPresets(): void {
     clear(presetBar);
+    presetBar.append(new Gtk.Label({ label: "preset:", xalign: 0, css_classes: ["pbar-label"] }));
     for (const item of conf().presets) {
-      const button = new Gtk.Button({ label: `${item.index}`, css_classes: ["pchip"] });
+      const button = new Gtk.Button({
+        label: `${item.index}`,
+        css_classes: item.index === preset() ? ["pchip", "on"] : ["pchip"],
+      });
       button.connect("clicked", () => setPreset(item.index));
       presetBar.append(button);
     }
-    presetBar.append(new Gtk.Label({ label: presetAt(conf(), preset()).label, xalign: 0, css_classes: ["hint"] }));
+    presetBar.append(new Gtk.Label({ label: presetAt(conf(), preset()).label, xalign: 0, hexpand: true, css_classes: ["pdesc"] }));
+  }
+
+  function renderBanner(): void {
+    const generated = current().kind === "generated";
+    banner.set_visible(generated);
+    if (generated) {
+      bannerText.set_label(
+        "This theme follows the wallpaper — its keys resolve through the theme map. Fork it to author literal colours.",
+      );
+    }
   }
 
   function renderLibrary(): void {
     clear(libBox);
+    const activeId = currentId();
     for (const theme of themes()) {
-      const button = new Gtk.Button({
-        label: `${theme.active ? "★ " : ""}${theme.name}  (${theme.kind})`,
-        css_classes: ["titem"],
-      });
+      const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 });
+      row.append(
+        new Gtk.Label({
+          label: "★",
+          xalign: 0,
+          css_classes: theme.active ? ["star", "on"] : ["star"],
+        }),
+      );
+      const meta = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true });
+      meta.append(new Gtk.Label({ label: theme.name, xalign: 0, css_classes: ["tname"] }));
+      const badges = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4 });
+      badges.append(new Gtk.Label({ label: theme.kind, xalign: 0, css_classes: ["badge", theme.kind] }));
+      if (theme.active) badges.append(new Gtk.Label({ label: "active", xalign: 0, css_classes: ["badge", "active"] }));
+      meta.append(badges);
+      row.append(meta);
+      const button = new Gtk.Button({ css_classes: theme.id === activeId ? ["titem", "active"] : ["titem"] });
+      button.set_child(row);
       button.connect("clicked", () => {
         setCurrentId(theme.id);
         setPending(new Map());
@@ -446,75 +824,188 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   }
 
   function renderSchematic(): void {
-    clear(canvasInner);
+    clear(schematicGrid);
+    const theme = current();
     const schematic = buildSchematic(conf(), preset(), selected());
-    canvasInner.append(new Gtk.Label({ label: schematic.caption, xalign: 0, css_classes: ["caption"] }));
+    const active = theme.active ? " · active" : "";
+    schematicCap.set_label(`btop schematic — ${theme.name} (${theme.kind})${active} · ${schematic.caption.replace("btop schematic — ", "")}`);
     const warning = hiddenModuleWarning(selected() ?? "", schematic.hiddenModules);
-    if (warning) canvasInner.append(new Gtk.Label({ label: `⚠ ${warning}`, xalign: 0, wrap: true, css_classes: ["warn"] }));
-    const grid = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8 });
+    schematicWarn.set_visible(warning !== null);
+    schematicWarn.set_label(warning ? `⚠ ${warning}` : "");
     for (const boxName of schematic.boxes) {
-      const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, css_classes: ["bbox"] });
-      column.append(new Gtk.Label({ label: boxName, xalign: 0, css_classes: ["btitle"] }));
+      const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3, css_classes: ["bbox"] });
+      column.append(new Gtk.Label({ label: boxName.toUpperCase(), xalign: 0, css_classes: ["btitle"] }));
       for (const element of schematic.elements.filter((e) => e.box === boxName)) {
         const lit = highlight() && schematic.highlighted.includes(element.id);
-        column.append(new Gtk.Label({ label: element.label, xalign: 0, css_classes: lit ? ["el", "hl"] : ["el"] }));
+        column.append(
+          new Gtk.Label({
+            label: element.label,
+            xalign: 0,
+            wrap: true,
+            max_width_chars: 14,
+            css_classes: lit ? ["el", "hl"] : ["el"],
+          }),
+        );
       }
-      grid.append(column);
+      schematicGrid.append(column);
     }
-    canvasInner.append(grid);
+    const background = backdropColour(controls(), resolveHex(effective()["main_bg"], palette()));
+    canvasProvider.load_from_string(fillRule(".canvas", background || "#101216"));
+
+    const key = selected();
+    const raw = key ? (effective()[key] ?? "") : "";
+    const resolved = key ? resolveHex(raw, palette()) : "#ff00ff";
+    coverageTitle.set_label(`KEY COVERAGE — ${key ?? "—"}`);
+    coverageValue.set_label(key ? `${raw === "" ? "empty (transparent)" : raw}  →  ${resolved || "transparent"}` : "—");
+    coverageProvider.load_from_string(fillRule(".anat-swatch", resolved || "transparent"));
+    clear(coverageChips);
+    const paints = key ? modulesFor(key) : [];
+    for (const module of ["cpu", "gpu", "mem", "net", "disks", "proc", "battery"]) {
+      const painted = paints.includes(module);
+      const lit = painted && schematic.boxes.includes(module);
+      const chips = ["modchip"];
+      if (lit) chips.push("on");
+      else if (painted) chips.push("off");
+      coverageChips.append(new Gtk.Label({ label: module, xalign: 0, css_classes: chips }));
+    }
   }
 
   function renderDiagnosis(): void {
-    const lines = diagnose(effective(), palette()).map(
-      (item) => `${item.level === "error" ? "⛔" : item.level === "warn" ? "⚠" : "✓"} ${item.message}`,
-    );
-    diag.set_label(lines.join("\n") || "✓ no meter-contrast problems");
+    clear(diagPanel);
+    const items = diagnose(effective(), palette());
+    if (!items.length) {
+      diagPanel.append(new Gtk.Label({ label: "✓ no meter-contrast problems", xalign: 0, css_classes: ["diag-row", "ok"] }));
+      return;
+    }
+    for (const item of items) {
+      const icon = item.level === "error" ? "⛔" : item.level === "warn" ? "⚠" : "✓";
+      const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, css_classes: ["diag-row", item.level] });
+      row.append(new Gtk.Label({ label: icon, xalign: 0 }));
+      row.append(new Gtk.Label({ label: item.message, xalign: 0, wrap: true, hexpand: true }));
+      diagPanel.append(row);
+    }
   }
 
   function renderDiff(): void {
+    clear(diffRows);
     const entries = diffEdits(current().map, pending());
+    const path = resolvedPath(current(), target(), { repoRoot: repoRoot(), installDir: installDir() });
+    diffPath.set_label(path);
+    diffPath.set_visible(entries.length > 0);
     if (!entries.length) {
-      diff.set_label("Pending edits — nothing written until you save\n— no changes —");
+      diffRows.append(new Gtk.Label({ label: "— no changes —", xalign: 0, css_classes: ["diff-ctx"] }));
       return;
     }
-    const path = resolvedPath(current(), target(), { repoRoot: repoRoot(), installDir: installDir() });
-    diff.set_label(
-      `Pending edits — nothing written until you save\n${path}\n` +
-        entries.map((e) => `- ${e.key}="${e.from}"\n+ ${e.key}="${e.to}"`).join("\n"),
-    );
+    for (const entry of entries) {
+      diffRows.append(new Gtk.Label({ label: `- ${entry.key}="${entry.from}"`, xalign: 0, wrap: true, css_classes: ["diff-del"] }));
+      diffRows.append(new Gtk.Label({ label: `+ ${entry.key}="${entry.to}"`, xalign: 0, wrap: true, css_classes: ["diff-add"] }));
+    }
   }
 
   function renderPicker(): void {
     clear(picker);
     const key = selected();
-    if (!key) return;
-    const grid = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 3, css_classes: ["swatches"] });
     const paletteNow = palette();
-    const addSwatch = (value: string, hex: string, title: string): void => {
-      const button = new Gtk.Button({ tooltip_text: title, css_classes: ["swatch"] });
-      const fill = new Gtk.Box({ hexpand: true, vexpand: true });
+    if (!key) {
+      picker.append(new Gtk.Label({ label: "Select a key to edit its colour.", xalign: 0, css_classes: ["hint"] }));
+      return;
+    }
+    const generated = current().kind === "generated";
+    picker.append(
+      new Gtk.Label({
+        label: generated ? `Draw ${key} from which palette role?` : `Set ${key} to which colour?`,
+        xalign: 0,
+        wrap: true,
+        css_classes: ["picker-title"],
+      }),
+    );
+
+    const map = effective();
+    const currentValue = map[key];
+    let swatchSeq = 0;
+
+    const addSwatch = (
+      parent: Gtk.Grid,
+      value: string,
+      hex: string,
+      token: string,
+      column: number,
+      row: number,
+      size: number,
+    ): void => {
+      const cls = `swatch-${key.replace(/[^a-z0-9]/gi, "")}-${swatchSeq}`;
+      swatchSeq += 1;
+      const classes = value === currentValue ? ["cell", "current", cls] : ["cell", cls];
+      const button = new Gtk.Button({ tooltip_text: `${token} ${hex}`, css_classes: classes });
       const provider = new Gtk.CssProvider();
-      provider.load_from_string(`.sw-${key}-${value.replace(/[^a-z0-9]/gi, "")} { background-color: ${hex}; }`);
-      fill.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
-      fill.set_css_classes([`sw-${key}-${value.replace(/[^a-z0-9]/gi, "")}`]);
-      button.set_child(fill);
-      button.set_size_request(22, 18);
+      provider.load_from_string(fillRule(`.${cls}`, hex));
+      button.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+      button.set_size_request(size, size);
       button.connect("clicked", () => pick(value));
-      grid.append(button);
+      parent.attach(button, column, row, 1, 1);
     };
-    paletteNow.ramp.forEach((hex, i) => addSwatch(`ramp[${i}]`, hex, `ramp[${i}] ${hex}`));
-    paletteNow.colors.forEach((hex, i) => addSwatch(hex, hex, `color${i} ${hex}`));
+
+    // Ramp stops (the generated theme's ramp[i] source).
+    const rampTitle = new Gtk.Label({ label: "ramp", xalign: 0, css_classes: ["picker-label"] });
+    picker.append(rampTitle);
+    const rampGrid = new Gtk.Grid({
+      column_spacing: 6,
+      row_spacing: 6,
+      halign: Gtk.Align.START,
+      css_classes: ["swatch-grid"],
+    });
+    paletteNow.ramp.slice(0, RAMP_SWATCH_MAX).forEach((hex, i) => {
+      addSwatch(rampGrid, `ramp[${i}]`, hex, `ramp[${i}]`, i % 5, Math.floor(i / 5), 44);
+    });
+    picker.append(rampGrid);
+
+    // color0–color15.
+    picker.append(new Gtk.Label({ label: "color0 – color15", xalign: 0, css_classes: ["picker-label"] }));
+    const colorGrid = new Gtk.Grid({
+      column_spacing: 6,
+      row_spacing: 6,
+      halign: Gtk.Align.START,
+      css_classes: ["swatch-grid"],
+    });
+    paletteNow.colors.slice(0, 16).forEach((hex, i) => {
+      addSwatch(colorGrid, hex, hex, `color${i}`, i % 8, Math.floor(i / 8), 30);
+    });
+    picker.append(colorGrid);
+
+    // Named palette tokens + transparent.
+    const namedBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, css_classes: ["named"] });
+    const addNamed = (token: string, value: string, hex: string, detail: string): void => {
+      const chipClass = `chip-${key.replace(/[^a-z0-9]/gi, "")}-${swatchSeq}`;
+      swatchSeq += 1;
+      const chip = new Gtk.Box({ css_classes: ["chip", chipClass] });
+      const chipProvider = new Gtk.CssProvider();
+      chipProvider.load_from_string(fillRule(`.${chipClass}`, hex));
+      chip.get_style_context().add_provider(chipProvider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+      const row = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 9, css_classes: ["sw-row"] });
+      row.append(chip);
+      const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 1, hexpand: true });
+      text.append(new Gtk.Label({ label: token, xalign: 0, css_classes: ["ph"] }));
+      text.append(new Gtk.Label({ label: detail, xalign: 0, css_classes: ["tok"] }));
+      row.append(text);
+      const button = new Gtk.Button({
+        css_classes: value === currentValue ? ["named-row", "current"] : ["named-row"],
+      });
+      button.set_child(row);
+      button.connect("clicked", () => pick(value));
+      namedBox.append(button);
+    };
     for (const token of NAMED_TOKENS) {
       const hex = token === "background" ? paletteNow.background : paletteNow.foreground;
-      addSwatch(token, hex, `${token} ${hex}`);
+      addNamed(token, generated ? token : hex, hex, hex);
     }
-    picker.append(grid);
-    const transparent = new Gtk.Button({ label: "transparent (empty value)", css_classes: ["toggle"] });
-    transparent.connect("clicked", () => pick(""));
-    picker.append(transparent);
-    const hexRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 4 });
-    const entry = new Gtk.Entry({ placeholder_text: "#rrggbb", hexpand: true });
-    const colourButton = new Gtk.ColorButton();
+    addNamed("transparent", "", "transparent", "empty value (btop)");
+    picker.append(namedBox);
+
+    // Custom hex + colour chooser.
+    const hexRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6, css_classes: ["hexrow"] });
+    hexRow.append(new Gtk.Label({ label: "custom", xalign: 0, css_classes: ["slider-label"] }));
+    const colourButton = new Gtk.ColorButton({ css_classes: ["color-button"] });
+    const entry = new Gtk.Entry({ placeholder_text: "#rrggbb", hexpand: true, css_classes: ["hex-entry"] });
     const applyColour = (): void => {
       const value = entry.get_text();
       if (/^#[0-9a-fA-F]{6}$/.test(value)) pick(value);
@@ -522,26 +1013,34 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
     entry.connect("activate", applyColour);
     colourButton.connect("color-set", () => {
       const rgba = colourButton.get_rgba();
-      const hex = `#${[rgba.red, rgba.green, rgba.blue].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("")}`;
+      const hex = `#${[rgba.red, rgba.green, rgba.blue]
+        .map((v) => Math.round(v * 255).toString(16).padStart(2, "0"))
+        .join("")}`;
       entry.set_text(hex);
       pick(hex);
     });
-    hexRow.append(entry);
     hexRow.append(colourButton);
+    hexRow.append(entry);
     picker.append(hexRow);
   }
 
   function renderGradient(): void {
     clear(gradBox);
     const key = selected();
-    if (!key || !key.match(/_(start|mid|end)$/)) return;
+    const isStop = !!key && /_(start|mid|end)$/.test(key);
+    gradHeader.set_visible(isStop);
+    gradBox.set_visible(isStop);
+    if (!key || !isStop) return;
     const family = key.replace(/_(start|mid|end)$/, "");
     const map = effective();
     for (const stop of ["start", "mid", "end"]) {
       const stopKey = `${family}_${stop}`;
       const value = map[stopKey] ?? "";
       const label = `${stopKey}: ${value === "" ? "empty (2-stop)" : resolveHex(value, palette())}`;
-      const button = new Gtk.Button({ label, css_classes: ["toggle"] });
+      const button = new Gtk.Button({
+        label,
+        css_classes: stopKey === key ? ["toggle", "stop", "on"] : ["toggle", "stop"],
+      });
       button.connect("clicked", () => setSelected(stopKey));
       gradBox.append(button);
     }
@@ -555,37 +1054,83 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
       });
       gradBox.append(add);
     }
+    gradBox.append(new Gtk.Label({ label: GRADIENT_LIMIT_NOTE, xalign: 0, wrap: true, css_classes: ["grad-note"] }));
   }
 
   function renderTarget(): void {
     const theme = current();
     targetPath.set_label(resolvedPath(theme, target(), { repoRoot: repoRoot(), installDir: installDir() }));
+    targetLabel.set_label(`writes to — ${target()}`);
     targetHintLabel.set_label(targetHint(target()));
     caveat.set_label(divergenceCaveat(target()) ?? generatedInstalledWarning(theme, target()) ?? "");
     repoBtn.set_css_classes(target() === "repo" ? ["toggle", "on"] : ["toggle"]);
     instBtn.set_css_classes(target() === "installed" ? ["toggle", "on"] : ["toggle"]);
     saveBtn.set_label(actionLabel(target()));
+    const cfg = conf();
+    cfgLabel.set_label(
+      `shown_boxes = "${cfg.shown_boxes.join(" ")}"\n` +
+        `presets = "${cfg.presets_raw}"\n` +
+        `parsed → ${cfg.presets.length} presets · preset 0 = all boxes (btop rule).`,
+    );
+  }
+
+  function renderWhere(): void {
+    const key = selected();
+    if (!key) {
+      whereLabel.set_label("Select a key to see what it paints.");
+      sitesLabel.set_label("");
+      return;
+    }
+    const entry = KEY_WIDGET_MAP.keys[key];
+    const modules = modulesFor(key);
+    const sites = sitesFor(key);
+    if (isUnreferenced(key) || !entry) {
+      whereLabel.set_label("Not referenced in btop_draw.cpp — chrome/base surface.");
+      sitesLabel.set_label(sites.join(" · "));
+      return;
+    }
+    const calls = entry.calls;
+    whereLabel.set_label(
+      `Paints ${modules.join(", ") || "—"}` +
+        (calls > 0 ? ` · ${calls} call site${calls === 1 ? "" : "s"}` : " · via gradient"),
+    );
+    sitesLabel.set_label(sites.slice(0, 4).join(" · "));
   }
 
   function renderSelection(): void {
     const theme = current();
     const key = selected();
-    selInfo.set_label(
-      `Theme: ${theme.name} (${theme.kind})\nKey: ${key ?? "—"}\n` +
-        `Value: ${key ? (effective()[key] ?? "") : "—"}\nResolved: ${key ? resolveHex(effective()[key], palette()) : "—"}`,
-    );
+    selTheme.set_label(theme.name);
+    selKey.set_label(key ?? "—");
+    selFeedLabel.set_label(theme.kind === "generated" ? "theme map (role)" : "literal colour");
+    selValue.set_label(key ? (effective()[key] ?? "") || "empty (transparent)" : "—");
+    selResolved.set_label(key ? resolveHex(effective()[key], palette()) || "transparent" : "—");
     for (const [value, button] of scopeButtons) {
       button.set_css_classes(scope() === value ? ["toggle", "on"] : ["toggle"]);
     }
+    scopeHint.set_label(
+      scope() === "key"
+        ? theme.kind === "generated"
+          ? `Changes the theme map for ${key ?? "this key"}.`
+          : `Changes only ${key ?? "this key"} in ${theme.name}.`
+        : scope() === "role"
+          ? "Applies to every key sharing this role suffix (start / mid / end)."
+          : "Applies to every key in this theme.",
+    );
     highlightBtn.set_css_classes(highlight() ? ["toggle", "on"] : ["toggle"]);
     backdropBtn.set_css_classes(controls().backdrop === "neutral" ? ["toggle", "on"] : ["toggle"]);
     for (const [i, level] of FIXED_FILL_LEVELS.entries()) {
       fillButtons[i].set_css_classes(controls().fixedFill === level ? ["toggle", "on"] : ["toggle"]);
     }
+    keysFor.set_label(`— ${theme.name} · all 48`);
+    statusLabel.set_label(status());
+    statusLabel.set_visible(status().length > 0);
+    renderWhere();
   }
 
   function renderAll(): void {
     renderTarget();
+    renderBanner();
     renderLibrary();
     renderTree();
     renderPresets();
@@ -595,6 +1140,10 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
     renderPicker();
     renderGradient();
     renderSelection();
+    // The tabs own pane visibility; do not reset the user's selection on a
+    // re-render (state changes must not bounce them back to Components).
+    compBtn.set_css_classes(livePaneActive ? ["toggle"] : ["toggle", "on"]);
+    liveBtn.set_css_classes(livePaneActive ? ["toggle", "on"] : ["toggle"]);
   }
 
   createEffect(renderAll);
@@ -623,7 +1172,7 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
         self.add_controller(keys);
       }}
     >
-      {root}
+      {shell}
     </window>
   );
 }

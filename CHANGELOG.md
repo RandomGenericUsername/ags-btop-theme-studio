@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.1.1 — 2026-10-28
+
+- Visual/layout pass on the Studio shell to match mock v8:
+  - header/intro strip and a 280 / 1fr / 320 three-column hierarchy;
+  - left rail with save target, read-only palette/theme/config inputs, consumed
+    `btop.conf`, theme library (star + kind/active badges) and the 48-key list
+    with per-key colour dots;
+  - center stage with a two-row load/fill controls bar, preset chips,
+    generated-theme banner, Components/Live tabs, key-coverage card, diagnosis
+    rows and a pending-edit diff panel;
+  - right rail with selection key/value rows, "Where it shows", gradient stops,
+    ramp / color0–15 / named-token palette grid, custom hex, edit scope and the
+    sticky Save/Revert footer.
+- The **real btop live preview** (`live/btop_live.py`) is preserved as the Live
+  pane; the mock's fake schematic is not copied over it.
+- `style.css` now expresses the mock-v8 panel/section vocabulary through the
+  `@color_*` desktop tokens; `.canvas` and `.live-frame` remain content literals.
+- Add the layout conformance test (“the studio shell keeps the mock-v8
+  three-column hierarchy”) to `tests/app-contract.test.mjs`.
+
+No state, pending-edit, save-target, fork/save or palette-refresh semantics
+changed in this release.
+
 ## v0.1.0 — 2026-10-27
 
 - Extract the btop Theme Studio from `ags-apps` v0.5.0 (`btop-theme-studio/`)
