@@ -249,6 +249,35 @@ test("the palette reload preserves staged edits and selection", () => {
   assert.match(refresh, /refreshPalette\?\.\(\)/);
 });
 
+// ── 3. palette.v1 role semantics (REQ-002) ─────────────────────────────────
+
+test("chrome CSS references palette roles, never legacy @color_* aliases", () => {
+  const css = readText("style.css");
+  assert.doesNotMatch(css, /@color_/, "style.css still references a legacy @color_* alias");
+  for (const role of [
+    "@surface",
+    "@surface_container",
+    "@on_surface",
+    "@on_surface_variant",
+    "@primary",
+    "@on_primary",
+    "@primary_container",
+    "@tertiary",
+    "@error",
+  ]) {
+    assert.ok(css.includes(role), `style.css is missing the ${role} role`);
+  }
+});
+
+test("the studio reads its palette from the platform provider, not colors.yaml", () => {
+  const window = readText("ui", "StudioWindow.tsx");
+  assert.match(window, /from\s+"ags-platform\/adapters\/theme"/);
+  assert.match(window, /theme\.palette\(\)/);
+  assert.doesNotMatch(window, /matchAll\(/, "app-side colors: list parsing survives");
+  assert.doesNotMatch(window, /paletteNow\.(ramp|colors|background|foreground)/);
+  assert.doesNotMatch(window, /ramp\[|color0\s*[–-]\s*color15|NAMED_TOKENS/);
+});
+
 // ── 3. Repository template + platform conformance ──────────────────────────
 
 test("the platform template gate passes for this repo", () => {
@@ -386,9 +415,9 @@ test("the contracts v0.3.0 manifest schema agrees with the platform", () => {
   );
 });
 
-test("the Makefile pins the v0.3.0 program tuple and the full gate set", () => {
+test("the Makefile pins the v0.4.0 platform / v0.3.0 contracts tuple and the full gate set", () => {
   const makefile = readText("Makefile");
-  assert.match(makefile, /^AGS_PLATFORM_VERSION := v0\.3\.0$/m);
+  assert.match(makefile, /^AGS_PLATFORM_VERSION := v0\.4\.0$/m);
   assert.match(makefile, /^CONTRACTS_VERSION := v0\.3\.0$/m);
   assert.match(makefile, /^gates: test conformance drift bundle typecheck$/m);
   assert.match(makefile, /^ci: test conformance drift$/m);

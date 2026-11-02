@@ -9,9 +9,9 @@ name: ci
 # GIR/Astal libraries, which a stock runner does not have. Do not add a
 # self-hosted job.
 #
-# The program tuple is `ags-platform`/`contracts` v0.3.0. Locally those tags
-# are symlinked under `.dev/`; CI checks out the exact tags explicitly. When a
-# tag is local-only and not yet published, the checkout step fails loudly --
+# The program tuple is `ags-platform` v0.4.0 / `contracts` v0.3.0. Locally those
+# tags are symlinked under `.dev/`; CI checks out the exact tags explicitly. When
+# a tag is local-only and not yet published, the checkout step fails loudly --
 # never silently skips the gate.
 on:
   push:
@@ -40,8 +40,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: RandomGenericUsername/ags-platform
-          ref: v0.3.0
-          path: .dev/ags-platform/v0.3.0
+          ref: v0.4.0
+          path: .dev/ags-platform/v0.4.0
 
       - name: Check out the pinned contracts tuple
         uses: actions/checkout@v4
@@ -52,7 +52,7 @@ jobs:
 
       - name: Assert the pinned tuple is present
         run: |
-          test -f .dev/ags-platform/v0.3.0/index.ts
+          test -f .dev/ags-platform/v0.4.0/index.ts
           test -f contracts/schemas/ags-app-manifest.schema.json
 
       - name: Run the stock-runner gates

@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — 2026-11-01
+
+- Migrate the studio to the `palette.v1` semantics exposed by `ags-platform`
+  v0.4.0 (REQ-002):
+  - `style.css` chrome now references roles (`@surface`, `@on_surface`,
+    `@primary`/`@on_primary`, `@primary_container`, `@tertiary`, `@error`,
+    `@on_surface_variant`) instead of `@color_*`; alpha and geometry are kept.
+  - `ui/StudioWindow.tsx` loads the typed palette through `theme.palette()`
+    (with a semantic fallback), instead of parsing `colors.yaml` and the
+    legacy `colors:` list. The picker lists roles plus custom hex/transparent.
+  - `lib/theme-model.ts` exports the canonical `BTOP_KEY_ROLES` table (the
+    same mapping as theme-producer) and builds `generatedDefaultMap()` from
+    role tokens. Literal hex from authored/user themes is preserved.
+  - Bump the gate platform pin to `v0.4.0`; contracts stays `v0.3.0`.
+- The pending-aware `palette-refresh` behavior is unchanged: unsaved edits,
+  selection, scope, save target and preview controls survive; no restart.
+
 ## v0.1.3 — 2026-10-29
 
 - Rebuild the **Components** pane as a real graphical btop reconstruction

@@ -68,10 +68,10 @@ no self-hosted runner and no CI secret dependency.
   `uv`, `pyte`). Deliberately not a stock-runner gate.
 - `make gates` — test + conformance + drift + bundle + typecheck.
 
-The program tuple is `ags-platform` / `contracts` v0.3.0, local-only in this
-run. Locally the tags are symlinked under `.dev/` (gitignored); CI checks the
-tags out explicitly. Never commit a fetched platform, a `contracts` checkout,
-`node_modules/`, `@girs/`, generated `tsconfig.json` or bundle output.
+The program tuple is `ags-platform` v0.4.0 / `contracts` v0.3.0, local-only in
+this run. Locally the tags are symlinked under `.dev/` (gitignored); CI checks
+the tags out explicitly. Never commit a fetched platform, a `contracts`
+checkout, `node_modules/`, `@girs/`, generated `tsconfig.json` or bundle output.
 
 ## 5. Palette-refresh invariants
 

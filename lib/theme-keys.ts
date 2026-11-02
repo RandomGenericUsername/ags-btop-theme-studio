@@ -146,9 +146,6 @@ export const GRADIENT_FAMILIES: readonly string[] = [
   "process",
 ];
 
-/** Named palette tokens btop understands in a generated theme. */
-export const NAMED_TOKENS: readonly string[] = ["background", "foreground", "cursor"];
-
 /** The boxes btop can draw, in schematic column order. */
 export const BOXES: readonly string[] = ["cpu", "gpu", "mem", "net", "disks", "proc"];
 

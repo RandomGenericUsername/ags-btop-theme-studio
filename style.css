@@ -1,20 +1,21 @@
-/* btop Theme Studio — mock-v8 shell, token-bound chrome
+/* btop Theme Studio — mock-v8 shell, palette.v1 role-bound chrome
  * ==========================================================================
  * The studio AUTHORS btop themes; its own chrome follows the desktop palette.
- * Every chrome colour below is a runtime token from colors.css (applied by
- * app.tsx through the platform Theme port, spine AD-13); a wallpaper change
- * repaints the whole window. Same token contract as the other GUI tools:
- *   @color_00 .. @color_15 / @color_background / @color_foreground
+ * Every chrome colour below is a `palette.v1` role exposed by the platform
+ * Theme provider (app.tsx applies it through the Theme port, spine AD-13); a
+ * wallpaper change repaints the whole window without an alias prefix.
  *
- * Shared language (gui-unification-ux-spec):
- *   selection   = @color_10  (where you are)
- *   action      = @color_06  (toggles on, primary button); text follows
- *                @color_foreground because the action slot is not guaranteed
- *                bright (live palette: dark steel)
- *   fields      = solid @color_01
- *   caution     = @color_03  (warnings)
- *   success     = @color_02  (status line)
- *   borders     = alpha(@color_foreground, 0.12)
+ * Shared language (gui-unification-ux-spec, migrated to roles):
+ *   ink         = @on_surface
+ *   panels      = @surface / @surface_container
+ *   selection   = @primary_container (where you are)
+ *   action      = @primary (toggles on, primary button); filled actions use
+ *                 @on_primary for their label
+ *   fields      = @surface_container
+ *   caution     = @tertiary  (warnings, write-enabled paths)
+ *   success     = @primary   (status line)
+ *   destructive = @error     (diagnosis errors, removed diff lines)
+ *   muted       = @on_surface_variant (alpha-preserved text/borders)
  *
  * CONTENT literals are deliberate and stay: `.canvas` is the neutral stage the
  * schematic is judged on (it shows the candidate btop theme, not the desktop
@@ -22,52 +23,52 @@
  * chrome, so neither follows the desktop palette.
  * ========================================================================== */
 .btop-theme-studio {
-  background: @color_00;
-  color: @color_foreground;
+  background: @surface;
+  color: @on_surface;
   font-size: 13px;
 }
-.studio-shell { background: @color_00; }
+.studio-shell { background: @surface; }
 .studio-header {
   padding: 9px 16px;
-  background: alpha(@color_01, 0.45);
-  border-bottom: 1px solid alpha(@color_foreground, 0.12);
+  background: alpha(@surface_container, 0.45);
+  border-bottom: 1px solid alpha(@on_surface_variant, 0.12);
 }
 .studio-title { font-size: 13px; font-weight: 700; }
-.studio-subtitle { font-size: 11px; color: alpha(@color_foreground, 0.45); }
-.studio-root { background: @color_00; }
+.studio-subtitle { font-size: 11px; color: alpha(@on_surface_variant, 0.45); }
+.studio-root { background: @surface; }
 
 /* ── left rail ─────────────────────────────────────────────────────────── */
 .studio-left-scroll {
   min-width: 280px;
-  background: alpha(@color_01, 0.26);
-  border-right: 1px solid alpha(@color_foreground, 0.12);
+  background: alpha(@surface_container, 0.26);
+  border-right: 1px solid alpha(@on_surface_variant, 0.12);
 }
 .studio-left { background: transparent; }
 .section-header { padding: 12px 14px 6px; }
-.section-title { font-size: 11px; font-weight: 700; color: alpha(@color_foreground, 0.48); }
-.section-sub { font-size: 10px; color: alpha(@color_foreground, 0.32); }
+.section-title { font-size: 11px; font-weight: 700; color: alpha(@on_surface_variant, 0.48); }
+.section-sub { font-size: 10px; color: alpha(@on_surface_variant, 0.32); }
 .studio-body { padding: 0 14px 10px; }
-.field-label { font-size: 11px; color: alpha(@color_foreground, 0.48); }
-.hint { color: alpha(@color_foreground, 0.45); font-size: 11px; }
-.warn { color: @color_03; font-size: 11px; }
-.status { color: @color_02; font-size: 11px; }
+.field-label { font-size: 11px; color: alpha(@on_surface_variant, 0.48); }
+.hint { color: alpha(@on_surface_variant, 0.45); font-size: 11px; }
+.warn { color: @tertiary; font-size: 11px; }
+.status { color: @primary; font-size: 11px; }
 .studio-status { padding: 0 14px 8px; }
 .studio-path {
-  background: @color_01;
-  border: 1px solid alpha(@color_foreground, 0.14);
+  background: @surface_container;
+  border: 1px solid alpha(@on_surface_variant, 0.14);
   border-radius: 5px;
   padding: 5px 8px;
   font-family: monospace;
   font-size: 11px;
-  color: @color_foreground;
+  color: @on_surface;
 }
-.studio-path.rw { border-color: @color_03; }
+.studio-path.rw { border-color: @tertiary; }
 .studio-cfg {
   font-family: monospace;
   font-size: 10px;
-  color: alpha(@color_foreground, 0.55);
+  color: alpha(@on_surface_variant, 0.55);
 }
-.stock-note { padding: 0 14px 10px; font-size: 10px; color: alpha(@color_foreground, 0.34); }
+.stock-note { padding: 0 14px 10px; font-size: 10px; color: alpha(@on_surface_variant, 0.34); }
 
 /* Shared control chrome. GTK's own button face is replaced by the flat mock
  * language; the token slots above still decide the colours. */
@@ -77,19 +78,19 @@
   text-shadow: none;
 }
 .toggle {
-  background: @color_01;
-  border: 1px solid alpha(@color_foreground, 0.14);
-  color: @color_foreground;
+  background: @surface_container;
+  border: 1px solid alpha(@on_surface_variant, 0.14);
+  color: @on_surface;
   border-radius: 5px;
   font-size: 11px;
   padding: 4px 9px;
   min-height: 0;
 }
-.toggle:hover { border-color: alpha(@color_foreground, 0.28); }
+.toggle:hover { border-color: alpha(@on_surface_variant, 0.28); }
 .toggle.on {
-  border-color: @color_06;
-  color: @color_06;
-  background: alpha(@color_06, 0.10);
+  border-color: @primary;
+  color: @primary;
+  background: alpha(@primary, 0.10);
 }
 .lib-actions { padding: 4px 14px 8px; }
 .lib-actions .toggle { font-size: 10px; padding: 3px 6px; }
@@ -103,18 +104,18 @@
   padding: 5px 7px;
   min-height: 0;
 }
-.titem:hover { background: alpha(@color_foreground, 0.05); }
+.titem:hover { background: alpha(@on_surface_variant, 0.05); }
 .titem.active {
-  background: alpha(@color_10, 0.18);
-  border-color: alpha(@color_10, 0.45);
+  background: alpha(@primary_container, 0.18);
+  border-color: alpha(@primary_container, 0.45);
 }
-.star { font-size: 13px; color: alpha(@color_foreground, 0.24); min-width: 16px; }
-.star.on { color: @color_03; }
+.star { font-size: 13px; color: alpha(@on_surface_variant, 0.24); min-width: 16px; }
+.star.on { color: @tertiary; }
 .tname { font-family: monospace; font-size: 11px; }
 .badge { font-size: 9px; padding: 1px 5px; border-radius: 4px; }
-.badge.generated { background: alpha(@color_05, 0.20); color: @color_05; }
-.badge.authored { background: alpha(@color_04, 0.18); color: @color_04; }
-.badge.active { background: alpha(@color_03, 0.18); color: @color_03; }
+.badge.generated { background: alpha(@secondary_container, 0.55); color: @on_secondary_container; }
+.badge.authored { background: alpha(@primary_container, 0.55); color: @on_primary_container; }
+.badge.active { background: alpha(@tertiary_container, 0.55); color: @on_tertiary_container; }
 
 /* 48-key tree. */
 .tree { padding: 0 6px 14px; }
@@ -122,7 +123,7 @@
   padding: 9px 8px 3px;
   font-size: 9px;
   font-weight: 700;
-  color: alpha(@color_foreground, 0.38);
+  color: alpha(@on_surface_variant, 0.38);
 }
 .item {
   background: transparent;
@@ -131,8 +132,8 @@
   padding: 3px 8px 3px 12px;
   min-height: 0;
 }
-.item:hover { background: alpha(@color_foreground, 0.05); }
-.item.active { background: alpha(@color_10, 0.20); }
+.item:hover { background: alpha(@on_surface_variant, 0.05); }
+.item.active { background: alpha(@primary_container, 0.20); }
 .key-label { font-family: monospace; font-size: 11px; }
 .dot {
   min-width: 11px;
@@ -142,72 +143,72 @@
 }
 
 /* ── center stage ──────────────────────────────────────────────────────── */
-.studio-center { background: @color_00; }
+.studio-center { background: @surface; }
 .canvas-bar {
   padding: 8px 14px;
-  background: alpha(@color_01, 0.42);
-  border-bottom: 1px solid alpha(@color_foreground, 0.12);
+  background: alpha(@surface_container, 0.42);
+  border-bottom: 1px solid alpha(@on_surface_variant, 0.12);
 }
-.slider-label { font-size: 11px; color: alpha(@color_foreground, 0.45); }
-.slider-value { font-size: 11px; color: @color_foreground; }
+.slider-label { font-size: 11px; color: alpha(@on_surface_variant, 0.45); }
+.slider-value { font-size: 11px; color: @on_surface; }
 .load-scale { min-width: 110px; }
-.load-scale trough { min-height: 4px; border-radius: 2px; background: alpha(@color_foreground, 0.15); }
-.load-scale highlight { background: @color_06; border-radius: 2px; }
+.load-scale trough { min-height: 4px; border-radius: 2px; background: alpha(@on_surface_variant, 0.15); }
+.load-scale highlight { background: @primary; border-radius: 2px; }
 .pbar {
   padding: 6px 14px;
   background: alpha(#000000, 0.18);
-  border-bottom: 1px solid alpha(@color_foreground, 0.12);
+  border-bottom: 1px solid alpha(@on_surface_variant, 0.12);
 }
-.pbar-label { font-size: 10px; color: alpha(@color_foreground, 0.4); }
+.pbar-label { font-size: 10px; color: alpha(@on_surface_variant, 0.4); }
 .pchip {
   background: transparent;
-  border: 1px solid alpha(@color_foreground, 0.14);
+  border: 1px solid alpha(@on_surface_variant, 0.14);
   border-radius: 10px;
   padding: 2px 9px;
   font-size: 10px;
   font-family: monospace;
-  color: alpha(@color_foreground, 0.55);
+  color: alpha(@on_surface_variant, 0.55);
   min-height: 0;
 }
 .pchip.on {
-  background: alpha(@color_06, 0.28);
-  border-color: @color_06;
-  color: @color_foreground;
+  background: alpha(@primary_container, 0.60);
+  border-color: @primary;
+  color: @on_primary_container;
 }
-.pdesc { font-size: 10px; color: alpha(@color_foreground, 0.35); }
+.pdesc { font-size: 10px; color: alpha(@on_surface_variant, 0.35); }
 .banner {
   padding: 7px 14px;
-  background: alpha(@color_05, 0.14);
-  border-bottom: 1px solid alpha(@color_foreground, 0.12);
+  background: alpha(@tertiary_container, 0.55);
+  border-bottom: 1px solid alpha(@on_surface_variant, 0.12);
 }
-.banner-icon { color: @color_05; }
-.banner-text { font-size: 11px; color: @color_05; }
+.banner-icon { color: @on_tertiary_container; }
+.banner-text { font-size: 11px; color: @on_tertiary_container; }
 
 /* Content stage — shows the candidate btop theme, not the desktop palette. */
 .canvas { background: #101216; padding: 12px; }
 .stage { }
-.stage-cap { font-family: monospace; font-size: 10px; color: alpha(@color_foreground, 0.5); }
+.stage-cap { font-family: monospace; font-size: 10px; color: alpha(@on_surface_variant, 0.5); }
 .bgrid { padding: 0; }
 .bbox {
-  border: 1px solid alpha(@color_foreground, 0.14);
+  border: 1px solid alpha(@on_surface_variant, 0.14);
   border-radius: 4px;
   padding: 5px 7px;
   min-width: 100px;
   background: alpha(#000000, 0.12);
 }
-.btitle { font-weight: 700; font-size: 10px; color: alpha(@color_foreground, 0.75); }
-.el { font-size: 10px; color: alpha(@color_foreground, 0.62); padding: 1px 0; }
+.btitle { font-weight: 700; font-size: 10px; color: alpha(@on_surface_variant, 0.75); }
+.el { font-size: 10px; color: alpha(@on_surface_variant, 0.62); padding: 1px 0; }
 .el.hl {
-  outline: 1px solid @color_06;
+  outline: 1px solid @primary;
   border-radius: 3px;
-  color: @color_foreground;
+  color: @on_surface;
 }
 .live-bar { }
 /* Content — a faithful btop terminal frame, so btop's own colours apply. */
 .live-frame {
   font-family: "JetBrainsMono Nerd Font", "Adwaita Mono", "DejaVu Sans Mono", monospace;
   font-size: 9px;
-  color: @color_foreground;
+  color: @on_surface;
   background: #000000;
   border: 1px solid alpha(#ffffff, 0.10);
   border-radius: 6px;
@@ -216,41 +217,41 @@
 
 /* Diagnosis + pending diff lift off the stage like mock v8. */
 .diag {
-  border-top: 1px solid alpha(@color_foreground, 0.12);
+  border-top: 1px solid alpha(@on_surface_variant, 0.12);
   background: alpha(#000000, 0.22);
   padding: 8px 14px;
 }
 .diag-row { font-size: 11px; padding: 2px 0; }
-.diag-row.ok { color: @color_02; }
-.diag-row.warn { color: @color_03; }
-.diag-row.error { color: @color_09; }
+.diag-row.ok { color: @primary; }
+.diag-row.warn { color: @tertiary; }
+.diag-row.error { color: @error; }
 .diff {
-  border-top: 1px solid alpha(@color_foreground, 0.12);
+  border-top: 1px solid alpha(@on_surface_variant, 0.12);
   background: alpha(#000000, 0.22);
   padding: 8px 14px;
 }
-.diff-title { font-size: 10px; font-weight: 700; color: alpha(@color_foreground, 0.4); }
-.diff-file { font-family: monospace; font-size: 10px; color: @color_04; }
-.diff-del { font-family: monospace; font-size: 10px; color: @color_09; }
-.diff-add { font-family: monospace; font-size: 10px; color: @color_02; }
-.diff-ctx { font-family: monospace; font-size: 10px; color: alpha(@color_foreground, 0.35); }
+.diff-title { font-size: 10px; font-weight: 700; color: alpha(@on_surface_variant, 0.4); }
+.diff-file { font-family: monospace; font-size: 10px; color: @secondary; }
+.diff-del { font-family: monospace; font-size: 10px; color: @error; }
+.diff-add { font-family: monospace; font-size: 10px; color: @primary; }
+.diff-ctx { font-family: monospace; font-size: 10px; color: alpha(@on_surface_variant, 0.35); }
 
 /* ── right rail ────────────────────────────────────────────────────────── */
 .studio-right {
   min-width: 320px;
-  background: alpha(@color_01, 0.26);
-  border-left: 1px solid alpha(@color_foreground, 0.12);
+  background: alpha(@surface_container, 0.26);
+  border-left: 1px solid alpha(@on_surface_variant, 0.12);
 }
 .studio-right-content { background: transparent; }
 .kv { padding: 2px 0; }
-.kv-label { font-size: 11px; color: alpha(@color_foreground, 0.45); }
+.kv-label { font-size: 11px; color: alpha(@on_surface_variant, 0.45); }
 .kv-value { font-family: monospace; font-size: 11px; }
 .where-label { font-size: 11px; }
-.sites { font-family: monospace; font-size: 10px; color: alpha(@color_foreground, 0.4); }
+.sites { font-family: monospace; font-size: 10px; color: alpha(@on_surface_variant, 0.4); }
 .grad .stop { font-family: monospace; font-size: 10px; }
-.grad-note { font-size: 10px; color: alpha(@color_foreground, 0.35); }
+.grad-note { font-size: 10px; color: alpha(@on_surface_variant, 0.35); }
 .picker-title { font-size: 11px; }
-.picker-label { font-size: 9px; font-weight: 700; color: alpha(@color_foreground, 0.35); }
+.picker-label { font-size: 9px; font-weight: 700; color: alpha(@on_surface_variant, 0.35); }
 .cell {
   padding: 0;
   min-width: 24px;
@@ -258,8 +259,8 @@
   border-radius: 5px;
   border: 2px solid transparent;
 }
-.cell:hover { border-color: alpha(@color_foreground, 0.5); }
-.cell.current { border-color: @color_foreground; }
+.cell:hover { border-color: alpha(@on_surface_variant, 0.5); }
+.cell.current { border-color: @on_surface; }
 .named { }
 .named-row {
   background: transparent;
@@ -268,10 +269,10 @@
   padding: 4px 6px;
   min-height: 0;
 }
-.named-row:hover { background: alpha(@color_foreground, 0.05); }
+.named-row:hover { background: alpha(@on_surface_variant, 0.05); }
 .named-row.current {
-  border-color: @color_06;
-  background: alpha(@color_06, 0.10);
+  border-color: @primary;
+  background: alpha(@primary, 0.10);
 }
 .chip {
   min-width: 20px;
@@ -280,21 +281,21 @@
   border: 1px solid alpha(#000000, 0.4);
 }
 .ph { font-family: monospace; font-size: 11px; }
-.tok { font-family: monospace; font-size: 10px; color: alpha(@color_foreground, 0.4); }
+.tok { font-family: monospace; font-size: 10px; color: alpha(@on_surface_variant, 0.4); }
 .hexrow { padding-top: 2px; }
 .hex-entry {
-  background: @color_01;
-  border: 1px solid alpha(@color_foreground, 0.14);
+  background: @surface_container;
+  border: 1px solid alpha(@on_surface_variant, 0.14);
   border-radius: 5px;
   padding: 4px 7px;
   font-family: monospace;
   font-size: 11px;
-  color: @color_foreground;
+  color: @on_surface;
   min-height: 0;
 }
 .color-button {
-  background: @color_01;
-  border: 1px solid alpha(@color_foreground, 0.14);
+  background: @surface_container;
+  border: 1px solid alpha(@on_surface_variant, 0.14);
   border-radius: 5px;
   padding: 0;
   min-width: 44px;
@@ -302,34 +303,34 @@
 }
 .scope-row { }
 .footer {
-  background: alpha(@color_01, 0.55);
-  border-top: 1px solid alpha(@color_foreground, 0.12);
+  background: alpha(@surface_container, 0.55);
+  border-top: 1px solid alpha(@on_surface_variant, 0.12);
   padding: 10px 14px;
 }
 .btn {
-  background: @color_01;
-  border: 1px solid alpha(@color_foreground, 0.14);
+  background: @surface_container;
+  border: 1px solid alpha(@on_surface_variant, 0.14);
   border-radius: 6px;
-  color: @color_foreground;
+  color: @on_surface;
   font-size: 12px;
   padding: 7px;
   min-height: 0;
 }
 .btn.primary {
-  background: alpha(@color_06, 0.28);
-  border-color: @color_06;
-  color: @color_foreground;
+  background: @primary;
+  border-color: @primary;
+  color: @on_primary;
 }
 
 /* Key-coverage card under the schematic (mock v8 `.anat`). */
 .anat {
   margin-top: 4px;
   padding: 9px 11px;
-  border: 1px solid alpha(@color_foreground, 0.12);
+  border: 1px solid alpha(@on_surface_variant, 0.12);
   border-radius: 6px;
   background: alpha(#000000, 0.20);
 }
-.anat-title { font-size: 9px; font-weight: 700; color: alpha(@color_foreground, 0.45); }
+.anat-title { font-size: 9px; font-weight: 700; color: alpha(@on_surface_variant, 0.45); }
 .anat-swatch {
   min-width: 18px;
   min-height: 18px;
@@ -341,18 +342,18 @@
   font-size: 9px;
   padding: 1px 6px;
   border-radius: 8px;
-  background: alpha(@color_foreground, 0.08);
-  color: alpha(@color_foreground, 0.45);
+  background: alpha(@on_surface_variant, 0.08);
+  color: alpha(@on_surface_variant, 0.45);
 }
-.modchip.on { background: alpha(@color_06, 0.35); color: @color_foreground; }
+.modchip.on { background: alpha(@primary, 0.35); color: @on_primary; }
 .modchip.off {
   background: transparent;
-  border: 1px dashed alpha(@color_foreground, 0.30);
-  color: alpha(@color_foreground, 0.35);
+  border: 1px dashed alpha(@on_surface_variant, 0.30);
+  color: alpha(@on_surface_variant, 0.35);
 }
 
 /* Sample meter in the key-coverage card (load/fill feedback in Components). */
-.coverage-meter-label { font-size: 9px; color: alpha(@color_foreground, 0.45); }
+.coverage-meter-label { font-size: 9px; color: alpha(@on_surface_variant, 0.45); }
 .coverage-meter { font-family: monospace; font-size: 11px; }
 
 /* ── Components: graphical btop reconstruction (FIX-003) ──────────────────
@@ -420,8 +421,8 @@
   text-shadow: none;
 }
 .key-hit:hover {
-  border-color: alpha(@color_foreground, 0.35);
-  background: alpha(@color_foreground, 0.05);
+  border-color: alpha(@on_surface_variant, 0.35);
+  background: alpha(@on_surface_variant, 0.05);
 }
 .meter-hit, .value-hit, .title-hit, .leader-hit, .tab-hit, .graph-hit, .chip-hit, .topbar-battery {
   padding: 0;

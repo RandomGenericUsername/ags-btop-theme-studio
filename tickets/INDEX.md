@@ -10,7 +10,7 @@
 ## Requirements
 
 - [REQ-001-bootstrap/ticket.md](./REQ-001-bootstrap/ticket.md) — Bootstrap ags-btop-theme-studio from ags-apps v0.5.0 | `done` | links: none
-- [REQ-002-theme-semantics/ticket.md](./REQ-002-theme-semantics/ticket.md) — Migrate the studio to palette.v1 role semantics | `in-progress` | links: none
+- [REQ-002-theme-semantics/ticket.md](./REQ-002-theme-semantics/ticket.md) — Migrate the studio to palette.v1 role semantics | `done` | links: none
 
 ## Bugs
 

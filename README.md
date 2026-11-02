@@ -47,11 +47,14 @@ create, fork, tune, preview and deploy themes:
 This app depends on `ags-platform`, never on another app (AD-1):
 
 - **Theming** — the desktop palette is applied through the `Theme` port
-  (`ags-platform/adapters/theme`, AD-13). `style.css` chrome is token-bound
-  (`@color_*` from `colors.css`) so a palette swap restyles the window. The two
-  CONTENT literals that remain are deliberate: `.canvas` is the neutral stage
-  the candidate btop theme is judged on, and `.live-frame` reproduces btop's
-  own black terminal.
+  (`ags-platform/adapters/theme`, AD-13). `style.css` chrome is bound to the
+  typed `palette.v1` roles (`@surface`, `@on_surface`, `@primary`, …) so a
+  palette swap restyles the window. The studio also reads the same typed
+  palette via `theme.palette()`; its generated candidate is a semantic
+  key→role map, not the legacy `colors:` index/ramp list. The two CONTENT
+  literals that remain are deliberate: `.canvas` is the neutral stage the
+  candidate btop theme is judged on, and `.live-frame` reproduces btop's own
+  black terminal.
 - **Icons / events** — this app has no icon-registry or event-bus copy and
   consumes no contract topic: it reads and writes files locally. The
   platform-consumption test pins that it does not grow one.
@@ -114,12 +117,13 @@ Both are app runtime / reproducibility assets, not provisioning concerns:
 
 ## Local development
 
-The program tuple is `ags-platform` / `contracts` `v0.3.0`. In this run those
-tags are local-only; the local gates use gitignored symlinks under `.dev/`:
+The program tuple is `ags-platform` `v0.4.0` / `contracts` `v0.3.0`. In this
+run those tags are local-only; the local gates use gitignored symlinks under
+`.dev/`:
 
 ```sh
 mkdir -p .dev/ags-platform .dev/contracts
-ln -s ../../../ags-platform .dev/ags-platform/v0.3.0
+ln -s ../../../ags-platform .dev/ags-platform/v0.4.0
 ln -s ../../../contracts .dev/contracts/v0.3.0
 ```
 

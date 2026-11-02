@@ -1,7 +1,9 @@
 // Unit tests for lib/theme-model.ts — picker scopes, pending edits/diff/revert,
 // one-click fixes, gradient editor, diagnosis, and the theme library.
 //   node tests/theme-model.mjs
+import { parsePaletteYaml } from "ags-platform/ports/palette";
 import {
+  BTOP_KEY_ROLES,
   GRADIENT_LIMIT_NOTE,
   addMiddleColour,
   applyPick,
@@ -38,21 +40,62 @@ function check(name, actual, expected) {
   }
 }
 
-const PALETTE = {
-  background: "#0b0b1a",
-  foreground: "#c2c2c5",
-  cursor: "#c2c2c5",
-  ramp: ["#0b0b1a", "#575660", "#5a5a6f", "#2d6596", "#557690", "#9a7268", "#549ec8", "#dbab67", "#c2c2c5"],
-  colors: ["#0b0b1a", "#575660", "#575660", "#5a5a6f", "#2d6596", "#2d6596", "#557690", "#557690", "#9a7268", "#9a7268", "#549ec8", "#549ec8", "#dbab67", "#dbab67", "#c2c2c5", "#c2c2c5"],
-};
+// The platform's own parser produces the fixture: the studio consumes
+// palette.v1 roles, not the legacy `colors:` list.
+const PALETTE = parsePaletteYaml(
+  [
+    'background: "#0b0b1a"',
+    'surface: "#0b0b1a"',
+    'on_surface: "#c2c2c5"',
+    'on_surface_variant: "#9a9aa2"',
+    'surface_container_lowest: "#07070f"',
+    'surface_container_low: "#12121f"',
+    'surface_container: "#1b1b2a"',
+    'surface_container_high: "#252536"',
+    'surface_container_highest: "#303044"',
+    'outline: "#575660"',
+    'outline_variant: "#3a3a48"',
+    'primary: "#2d6596"',
+    'on_primary: "#ffffff"',
+    'primary_container: "#2d6596"',
+    'on_primary_container: "#c2c2c5"',
+    'secondary: "#9a7268"',
+    'on_secondary: "#ffffff"',
+    'secondary_container: "#557690"',
+    'on_secondary_container: "#eef2ff"',
+    'tertiary: "#549ec8"',
+    'on_tertiary: "#101216"',
+    'tertiary_container: "#dbab67"',
+    'on_tertiary_container: "#2b1d0a"',
+    'error: "#dbab67"',
+    'on_error: "#1a1206"',
+    'error_container: "#5a1f1f"',
+    'on_error_container: "#ffdada"',
+    'on_backdrop: "#c2c2c5"',
+  ].join("\n"),
+);
 
 // ── resolution ──────────────────────────────────────────────────────────────
-check("ramp token", resolveHex("ramp[3]", PALETTE), "#2d6596");
-check("named background", resolveHex("background", PALETTE), "#0b0b1a");
-check("named foreground", resolveHex("foreground", PALETTE), "#c2c2c5");
-check("color token", resolveHex("color4", PALETTE), "#2d6596");
+check("role token", resolveHex("primary", PALETTE), "#2d6596");
+check("surface role token", resolveHex("surface", PALETTE), "#0b0b1a");
 check("literal hex", resolveHex("#abcdef", PALETTE), "#abcdef");
 check("transparent", resolveHex("", PALETTE), "");
+check("legacy ramp token is not a role", resolveHex("ramp[3]", PALETTE), "#ff00ff");
+check("legacy color token is not a role", resolveHex("color4", PALETTE), "#ff00ff");
+
+// ── canonical btop key -> role mapping ──────────────────────────────────────
+check("mapping covers 48 keys", Object.keys(BTOP_KEY_ROLES).length, 48);
+check("main_bg <- surface", BTOP_KEY_ROLES.main_bg, "surface");
+check("main_fg <- on_surface", BTOP_KEY_ROLES.main_fg, "on_surface");
+check("title <- primary", BTOP_KEY_ROLES.title, "primary");
+check("hi_fg <- primary", BTOP_KEY_ROLES.hi_fg, "primary");
+check("selected_bg <- primary_container", BTOP_KEY_ROLES.selected_bg, "primary_container");
+check("inactive_fg <- outline", BTOP_KEY_ROLES.inactive_fg, "outline");
+check(
+  "every mapped role exists in palette.v1",
+  Object.values(BTOP_KEY_ROLES).every((role) => role in PALETTE.roles),
+  true,
+);
 
 // ── picker scopes (task 4.6) ────────────────────────────────────────────────
 const base = generatedDefaultMap();
@@ -90,9 +133,11 @@ const transparent = fixTransparentMeters(base);
 check("transparent meters: meter_bg empty", transparent.meter_bg, "");
 
 // ── gradient editor (task 4.5) ──────────────────────────────────────────────
-check("download is two-stop", isTwoStop(base, "download"), true);
-const three = addMiddleColour(base, "download");
-check("add middle colour sets download_mid", three.download_mid, base.download_start);
+check("canonical download family starts three-stop", isTwoStop(base, "download"), false);
+const twoStop = { ...base, download_mid: "" };
+check("download is two-stop when mid is empty", isTwoStop(twoStop, "download"), true);
+const three = addMiddleColour(twoStop, "download");
+check("add middle colour sets download_mid", three.download_mid, twoStop.download_start);
 check("download is now three-stop", isTwoStop(three, "download"), false);
 check("three-stop limit stated", /three stops/.test(GRADIENT_LIMIT_NOTE), true);
 check("limit states keys cannot be added", /cannot be added/.test(GRADIENT_LIMIT_NOTE), true);
@@ -137,8 +182,14 @@ check("serialize has 48 lines", text.trim().split("\n").length, 48);
 check("serialize line shape", text.includes('theme[main_bg]="#0b0b1a"'), true);
 check("parse round-trips", parseTheme(text), forked.map);
 check("generated default has 48 keys", Object.keys(base).length, 48);
-check("generated default download_mid empty", base.download_mid, "");
+check("generated default main_bg is the surface role", base.main_bg, "surface");
+check("generated default download_mid is a role", base.download_mid, "surface_container");
 check("generated default keys are all real", THEME_KEYS.every((k) => k in base), true);
+check(
+  "generated default values are the canonical roles",
+  THEME_KEYS.every((key) => base[key] === BTOP_KEY_ROLES[key]),
+  true,
+);
 
 if (failures > 0) {
   console.error(`${failures} case(s) mismatched`);

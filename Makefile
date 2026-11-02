@@ -1,9 +1,10 @@
 .PHONY: help platform-dev contracts-dev deps types test conformance drift live-tests ci bundle typecheck gates clean
 
-# The program tuple this app builds/tests against (AD-31/AD-34). v0.3.0 is
+# The program tuple this app builds/tests against (AD-31/AD-34). The platform
+# pin is v0.4.0 (palette.v1 roles + subscribe); contracts stays v0.3.0. Both are
 # LOCAL-ONLY in this run: local gates use gitignored symlinks under .dev/;
 # CI checks the exact tags out explicitly once published.
-AGS_PLATFORM_VERSION := v0.3.0
+AGS_PLATFORM_VERSION := v0.4.0
 CONTRACTS_VERSION := v0.3.0
 AGS_PLATFORM_REPO := https://github.com/RandomGenericUsername/ags-platform.git
 CONTRACTS_REPO := https://github.com/RandomGenericUsername/contracts.git
@@ -24,8 +25,8 @@ help:
 	@echo "make ci            stock-runner gate: test + conformance + drift"
 	@echo "make gates         all local gates: test + conformance + drift + bundle + typecheck"
 	@echo ""
-	@echo "Local-only v0.3.0 tuple: put a checkout/symlink at"
-	@echo "  .dev/ags-platform/v0.3.0  (or AGS_PLATFORM_DEV=/path/to/ags-platform)"
+	@echo "Local-only tuple: put a checkout/symlink at"
+	@echo "  .dev/ags-platform/v0.4.0  (or AGS_PLATFORM_DEV=/path/to/ags-platform)"
 	@echo "  .dev/contracts/v0.3.0     (or CONTRACTS_ROOT=/path/to/contracts)"
 	@echo "Default contracts fallback is ../contracts."
 
@@ -143,7 +144,8 @@ bundle: platform-dev
 # Desktop-stack typecheck: zero errors allowed in this repo's tree. Tolerate
 # and count the AGS runtime's own /usr/share/ags/js errors (machine/GIR
 # dependent) and the external platform unit's (AD-17: its own repo gates it).
-typecheck: deps types platform-dev
+typecheck: deps types
+	@$(MAKE) --no-print-directory platform-dev
 	@[ -d "@girs" ] || { echo "FAIL: typecheck: @girs missing after types" >&2; exit 1; }
 	@[ -x node_modules/.bin/tsc ] || { echo "FAIL: typecheck: typescript missing after deps" >&2; exit 1; }
 	@[ -f node_modules/ags-platform/index.ts ] || { echo "FAIL: typecheck: platform link missing" >&2; exit 1; }

@@ -4,9 +4,9 @@
 // Pure and I/O-free: the UI layer owns file reads/writes and the AGS
 // containers. Everything here is unit-testable with plain node.
 
+import type { Palette } from "ags-platform/ports/palette";
 import {
   GRADIENT_FAMILIES,
-  NAMED_TOKENS,
   THEME_KEYS,
   keysOf,
   familyOf,
@@ -16,16 +16,6 @@ import {
 } from "./theme-keys.ts";
 
 export type ThemeKind = "generated" | "authored";
-
-export interface Palette {
-  readonly background: string;
-  readonly foreground: string;
-  readonly cursor: string;
-  /** Deduped ramp stops (the generated theme's `ramp[i]` source). */
-  readonly ramp: readonly string[];
-  /** The full color0–color15 palette. */
-  readonly colors: readonly string[];
-}
 
 export interface Theme {
   readonly id: string;
@@ -44,32 +34,114 @@ export const TRANSPARENT = "";
 
 const FALLBACK = "#ff00ff";
 
-/** Resolve a theme value (token or literal) to a hex colour; "" = transparent. */
+/**
+ * The canonical btop key -> palette.v1 role mapping (48 keys).
+ *
+ * This mirrors theme-producer's `BTOP_KEY_ROLES` capability table
+ * (`src/theme_producer/adapters/projections/btop.py`): the studio's generated
+ * base and the runtime's `colors.btop.theme` projection must agree. Users may
+ * still edit any key (literal hex or another role) in the pending map.
+ */
+export const BTOP_KEY_ROLES: Readonly<Record<string, string>> = Object.freeze({
+  main_bg: "surface",
+  main_fg: "on_surface",
+  title: "primary",
+  hi_fg: "primary",
+  selected_bg: "primary_container",
+  selected_fg: "on_primary_container",
+  inactive_fg: "outline",
+  graph_text: "on_surface_variant",
+  meter_bg: "surface_container_high",
+  proc_misc: "secondary",
+  cpu_box: "outline_variant",
+  mem_box: "outline_variant",
+  net_box: "outline_variant",
+  proc_box: "outline_variant",
+  div_line: "outline_variant",
+  proc_pause_bg: "secondary_container",
+  proc_follow_bg: "primary_container",
+  proc_banner_bg: "tertiary_container",
+  proc_banner_fg: "on_tertiary_container",
+  followed_bg: "primary_container",
+  followed_fg: "on_primary_container",
+  temp_start: "tertiary",
+  temp_mid: "secondary",
+  temp_end: "error",
+  cpu_start: "primary",
+  cpu_mid: "secondary",
+  cpu_end: "tertiary",
+  free_start: "surface_container_low",
+  free_mid: "surface_container",
+  free_end: "surface_container_high",
+  cached_start: "tertiary",
+  cached_mid: "secondary",
+  cached_end: "error",
+  available_start: "surface_container_low",
+  available_mid: "surface_container",
+  available_end: "surface_container_high",
+  used_start: "primary_container",
+  used_mid: "secondary_container",
+  used_end: "tertiary_container",
+  download_start: "surface_container_low",
+  download_mid: "surface_container",
+  download_end: "surface_container_high",
+  upload_start: "surface_container_low",
+  upload_mid: "surface_container",
+  upload_end: "surface_container_high",
+  process_start: "primary_container",
+  process_mid: "secondary_container",
+  process_end: "tertiary_container",
+});
+
+/**
+ * A small semantic fallback when the platform palette is unavailable (first
+ * launch before the runtime has produced `colors.yaml`). It is deliberately a
+ * role map, not a legacy `colors:` index list: the studio never invents the
+ * old carrier shape again.
+ */
+export const FALLBACK_PALETTE: Palette = Object.freeze({
+  version: "1",
+  roles: Object.freeze({
+    background: "#101216",
+    surface: "#101216",
+    on_surface: "#c2c2c5",
+    on_surface_variant: "#a8a8ad",
+    surface_container_low: "#16171c",
+    surface_container: "#1b1c22",
+    surface_container_high: "#25262e",
+    outline: "#8b8b93",
+    outline_variant: "#3a3a42",
+    primary: "#6ea8fe",
+    on_primary: "#0b0b1a",
+    primary_container: "#2d3a52",
+    on_primary_container: "#dbe4ff",
+    secondary: "#9a7268",
+    on_secondary: "#1a1210",
+    secondary_container: "#3a2f2c",
+    on_secondary_container: "#ffd9d0",
+    tertiary: "#dbab67",
+    on_tertiary: "#1f1608",
+    tertiary_container: "#4a3a22",
+    on_tertiary_container: "#ffe1b3",
+    error: "#ff6b6b",
+    on_error: "#2a0000",
+    error_container: "#5a1f1f",
+    on_error_container: "#ffdada",
+    on_backdrop: "#e3e1e9",
+  }),
+});
+
+/**
+ * Resolve a theme value to a hex colour. A `#` literal is returned verbatim;
+ * an empty string is btop's transparent value; anything else is a palette.v1
+ * role name resolved through the platform palette. Unknown tokens are the
+ * diagnostic magenta fallback, never a stale `ramp[i]`/`colorN` index.
+ */
 export function resolveHex(value: string | undefined, palette: Palette): string {
   if (value === undefined) return FALLBACK;
   if (value === "") return TRANSPARENT;
   if (value.startsWith("#")) return value;
-  if (value === "background") return palette.background;
-  if (value === "foreground") return palette.foreground;
-  if (value === "cursor") return palette.cursor;
-  if (value.startsWith("ramp[")) {
-    const index = Number(value.slice(5, -1));
-    return palette.ramp[index] ?? FALLBACK;
-  }
-  if (/^color\d+$/.test(value)) {
-    const index = Number(value.slice(5));
-    return palette.colors[index] ?? FALLBACK;
-  }
-  return FALLBACK;
-}
-
-/** True when a value is a generated-theme palette reference (not a literal). */
-export function isPaletteReference(value: string): boolean {
-  return (
-    value.startsWith("ramp[") ||
-    /^color\d+$/.test(value) ||
-    (NAMED_TOKENS as readonly string[]).includes(value)
-  );
+  return palette.roles[value] ?? FALLBACK;
 }
 
 /** The effective theme map: on-disk map overlaid with pending edits. */
@@ -299,48 +371,15 @@ export function parseTheme(text: string): Record<string, string> {
   return map;
 }
 
-/** A default generated-theme map (token form) for a fresh studio session. */
+/**
+ * The generated base map (palette-linked role tokens) for a fresh session.
+ * Every one of the 48 btop keys starts on the canonical role in
+ * `BTOP_KEY_ROLES`; the user can then pick a different role or a literal hex.
+ */
 export function generatedDefaultMap(): Record<string, string> {
   const map: Record<string, string> = {};
-  for (const key of THEME_KEYS) map[key] = "";
-  map.main_bg = "background";
-  map.main_fg = "foreground";
-  map.title = "foreground";
-  map.hi_fg = "ramp[6]";
-  map.selected_bg = "ramp[3]";
-  map.selected_fg = "foreground";
-  map.inactive_fg = "ramp[2]";
-  map.graph_text = "ramp[6]";
-  map.meter_bg = "ramp[1]";
-  map.proc_misc = "ramp[6]";
-  map.cpu_box = "ramp[2]";
-  map.mem_box = "ramp[2]";
-  map.net_box = "ramp[2]";
-  map.proc_box = "ramp[2]";
-  map.div_line = "ramp[1]";
-  const stops: Record<string, [string, string, string]> = {
-    used: ["ramp[1]", "ramp[4]", "ramp[7]"],
-    free: ["ramp[0]", "ramp[3]", "ramp[6]"],
-    available: ["ramp[0]", "ramp[3]", "ramp[6]"],
-    cpu: ["ramp[3]", "ramp[5]", "ramp[7]"],
-    temp: ["ramp[3]", "ramp[5]", "ramp[7]"],
-    cached: ["ramp[3]", "ramp[5]", "ramp[7]"],
-    download: ["ramp[0]", "", "ramp[6]"],
-    upload: ["ramp[0]", "", "ramp[6]"],
-    process: ["ramp[1]", "ramp[4]", "ramp[7]"],
-  };
-  for (const [family, [start, mid, end]] of Object.entries(stops)) {
-    map[`${family}_start`] = start;
-    map[`${family}_mid`] = mid;
-    map[`${family}_end`] = end;
-  }
-  map.proc_pause_bg = "ramp[5]";
-  map.proc_follow_bg = "ramp[6]";
-  map.proc_banner_bg = "ramp[3]";
-  map.proc_banner_fg = "foreground";
-  map.followed_bg = "ramp[6]";
-  map.followed_fg = "foreground";
+  for (const key of THEME_KEYS) map[key] = BTOP_KEY_ROLES[key] ?? "";
   return map;
 }
 
-export { THEME_KEYS, GRADIENT_FAMILIES, NAMED_TOKENS, familyOf, isGradientStop, roleSuffix };
+export { THEME_KEYS, GRADIENT_FAMILIES, familyOf, isGradientStop, roleSuffix };

@@ -3,6 +3,8 @@ import GLib from "gi://GLib?version=2.0";
 import Pango from "gi://Pango?version=1.0";
 import { createEffect, createState } from "ags";
 import { execAsync } from "ags/process";
+import { theme } from "ags-platform/adapters/theme";
+import type { Palette } from "ags-platform/ports/palette";
 import {
   DEFAULT_CONTROLS,
   FIXED_FILL_LEVELS,
@@ -20,11 +22,11 @@ import {
   meterBand,
   type GradientStops,
 } from "../lib/schematic-graphics";
-import { KEY_GROUPS, NAMED_TOKENS } from "../lib/theme-keys";
+import { KEY_GROUPS } from "../lib/theme-keys";
 import { KEY_WIDGET_MAP, isUnreferenced, modulesFor, sitesFor } from "../lib/key-map";
 import {
+  FALLBACK_PALETTE,
   GRADIENT_LIMIT_NOTE,
-  type Palette,
   type Scope,
   type Theme,
   addMiddleColour,
@@ -101,21 +103,19 @@ function loadConfText(): string {
   );
 }
 
+/**
+ * The typed palette comes from the platform Theme port (`palette()`), never
+ * from an app-side parse of `colors.yaml`: the runtime owns the artifact and
+ * the platform owns its vocabulary. If the producer has not written one yet
+ * (first launch), a semantic fallback keeps the studio usable without
+ * resurrecting the legacy `background`/`foreground`/`colors:` carrier shape.
+ */
 function loadPalette(): Palette {
-  const text = readFile(`${stateHome()}/dotfiles/current/colors.yaml`);
-  const background = text?.match(/background:\s*"(#[0-9a-fA-F]{6})"/)?.[1] ?? "#0b0b1a";
-  const foreground = text?.match(/foreground:\s*"(#[0-9a-fA-F]{6})"/)?.[1] ?? "#c2c2c5";
-  const all = [...(text?.matchAll(/-\s*"(#[0-9a-fA-F]{6})"/g) ?? [])].map((m) => m[1]);
-  const colors = all.slice(0, 16);
-  const ramp: string[] = [];
-  for (const colour of colors) if (ramp[ramp.length - 1] !== colour) ramp.push(colour);
-  return {
-    background,
-    foreground,
-    cursor: foreground,
-    ramp: ramp.length ? ramp : [background, foreground],
-    colors: colors.length ? colors : [background, foreground],
-  };
+  try {
+    return theme.palette();
+  } catch {
+    return FALLBACK_PALETTE;
+  }
 }
 
 function loadGeneratedMap(): Record<string, string> {
@@ -174,7 +174,6 @@ export function refreshStudioPalette(): void {
 }
 
 const LIVE_PLACEHOLDER = "Live preview not rendered yet — press “Refresh live preview”.";
-const RAMP_SWATCH_MAX = 32;
 
 export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   const [confText] = createState(loadConfText());
@@ -826,7 +825,7 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
 
   // Palette picker.
   const picker = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, css_classes: ["studio-body", "picker"] });
-  rightContent.append(section("Palette", "— ramp · color0–15 · named"));
+  rightContent.append(section("Palette", "— semantic roles · custom"));
   rightContent.append(picker);
 
   // Edit scope.
@@ -1676,34 +1675,21 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
       parent.attach(button, column, row, 1, 1);
     };
 
-    // Ramp stops (the generated theme's ramp[i] source).
-    const rampTitle = new Gtk.Label({ label: "ramp", xalign: 0, css_classes: ["picker-label"] });
-    picker.append(rampTitle);
-    const rampGrid = new Gtk.Grid({
+    // The palette.v1 role map from the platform provider. Generated themes
+    // keep the role name (palette-linked); authored themes freeze the hex.
+    picker.append(new Gtk.Label({ label: "roles", xalign: 0, css_classes: ["picker-label"] }));
+    const roleGrid = new Gtk.Grid({
       column_spacing: 6,
       row_spacing: 6,
       halign: Gtk.Align.START,
       css_classes: ["swatch-grid"],
     });
-    paletteNow.ramp.slice(0, RAMP_SWATCH_MAX).forEach((hex, i) => {
-      addSwatch(rampGrid, `ramp[${i}]`, hex, `ramp[${i}]`, i % 5, Math.floor(i / 5), 44);
+    Object.entries(paletteNow.roles).forEach(([role, hex], index) => {
+      addSwatch(roleGrid, generated ? role : hex, hex, role, index % 5, Math.floor(index / 5), 30);
     });
-    picker.append(rampGrid);
+    picker.append(roleGrid);
 
-    // color0–color15.
-    picker.append(new Gtk.Label({ label: "color0 – color15", xalign: 0, css_classes: ["picker-label"] }));
-    const colorGrid = new Gtk.Grid({
-      column_spacing: 6,
-      row_spacing: 6,
-      halign: Gtk.Align.START,
-      css_classes: ["swatch-grid"],
-    });
-    paletteNow.colors.slice(0, 16).forEach((hex, i) => {
-      addSwatch(colorGrid, hex, hex, `color${i}`, i % 8, Math.floor(i / 8), 30);
-    });
-    picker.append(colorGrid);
-
-    // Named palette tokens + transparent.
+    // Transparent (btop's empty value).
     const namedBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, css_classes: ["named"] });
     const addNamed = (token: string, value: string, hex: string, detail: string): void => {
       const chipClass = `chip-${key.replace(/[^a-z0-9]/gi, "")}-${swatchSeq}`;
@@ -1725,10 +1711,6 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
       button.connect("clicked", () => pick(value));
       namedBox.append(button);
     };
-    for (const token of NAMED_TOKENS) {
-      const hex = token === "background" ? paletteNow.background : paletteNow.foreground;
-      addNamed(token, generated ? token : hex, hex, hex);
-    }
     addNamed("transparent", "", "transparent", "empty value (btop)");
     picker.append(namedBox);
 

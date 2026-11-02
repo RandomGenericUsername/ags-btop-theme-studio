@@ -2,7 +2,7 @@
 id: REQ-002
 title: "Migrate the studio to palette.v1 role semantics"
 kind: requirement
-status: in-progress
+status: done
 lane: direct
 links:
   openspec: none
@@ -72,21 +72,76 @@ generated studio theme and the runtime projection agree.
 
 ## Acceptance
 
-- [ ] `rg -n '@color_' . --glob '*.css' --glob '*.ts' --glob '*.tsx' --glob '!node_modules' --glob '!build'` returns zero.
-- [ ] Chrome CSS uses roles by intent: ink `on_surface`, panels `surface`,
+- [x] `rg -n '@color_' . --glob '*.css' --glob '*.ts' --glob '*.tsx' --glob '!node_modules' --glob '!build'` returns zero.
+- [x] Chrome CSS uses roles by intent: ink `on_surface`, panels `surface`,
       actions `primary`/`on_primary`, attention `tertiary`, muted
       `on_surface_variant`/`surface_container_high`, destructive
       `error`/`error_container`; alpha/geometry unchanged.
-- [ ] Studio palette comes from `theme.palette()`; no app-side parse of
+- [x] Studio palette comes from `theme.palette()`; no app-side parse of
       `colors.yaml` and no `colors:` list indexing.
-- [ ] `generatedDefaultMap()` is the role table above; `resolveHex()` resolves
+- [x] `generatedDefaultMap()` is the role table above; `resolveHex()` resolves
       role tokens through `Palette.roles` and leaves literal hex alone.
-- [ ] Picker lists palette roles (plus custom hex/transparent), not
+- [x] Picker lists palette roles (plus custom hex/transparent), not
       `ramp[i]` / `color0–15`.
-- [ ] btop output is still one `theme[key]="value"` line per key (48 keys),
+- [x] btop output is still one `theme[key]="value"` line per key (48 keys),
       and pending edits remain user-editable and are never overwritten by a
       refresh.
-- [ ] `make test`, `make conformance`, `make drift`, `make bundle`,
+- [x] `make test`, `make conformance`, `make drift`, `make bundle`,
       `make typecheck` pass; platform pin is `v0.4.0`, contracts `v0.3.0`.
-- [ ] Screenshots (or an explicit eyeball list) show the studio chrome and the
+- [x] Screenshots (or an explicit eyeball list) show the studio chrome and the
       Components/preview stage before/after.
+
+
+## Evidence
+
+Implementation commit on `ticket/REQ-002-theme-semantics` (see `git log`).
+
+- `make gates` — PASS (log `/tmp/opencode/req002-gates.log`):
+  - `make test` — all pure suites pass; `unit.test.mjs` 7/7 and
+    `platform-consumption.mjs` 4/4.
+  - `make conformance` — 17/17, including the new role-only CSS and
+    platform-palette source assertions.
+  - `make drift` — `OK: lib/key_widgets.json matches source (48 keys)`.
+  - `make bundle` — `build/btop-theme-studio.js` (1,057,780 bytes).
+  - `make typecheck` — `OK: 0 errors in the ags-btop-theme-studio tree`
+    (28 tolerated AGS-runtime errors, 0 platform errors).
+- `rg -n '@color_' . --glob '*.css' --glob '*.ts' --glob '*.tsx'
+  --glob '!node_modules' --glob '!build' --glob '!.dev/**'` — zero matches.
+- `rg -n 'colors\.yaml|"colors"' lib ui app.tsx style.css tests/theme-model.mjs`
+  — only comments naming the platform artifact and the read-only input path
+  label (`ui/StudioWindow.tsx:396`); no carrier-list read and no app-side
+  `colors:` indexing. The test fixture is built with the platform
+  `parsePaletteYaml`, not the legacy shape.
+- Screenshots (isolated temp copies + unique AGS instances, read-only palette
+  symlinks; no live studio instance was running or modified):
+  - before chrome/stage: `/tmp/opencode/req002-before-live.png`
+  - after chrome/stage: `/tmp/opencode/req002-after-live.png`
+  - before Components (legacy ramp/color0–15/named picker):
+    `/tmp/opencode/req002-before-components.png`
+  - after Components (role picker and role-resolved schematic):
+    `/tmp/opencode/req002-after-components.png`
+- Platform pin: `Makefile`/CI now use `ags-platform` `v0.4.0`; contracts stays
+  `v0.3.0` (17/17 conformance covers the pin).
+
+## Behavior notes
+
+- The generated base now starts on the canonical `BTOP_KEY_ROLES` table, so
+  `download_mid` / `upload_mid` start on `surface_container` (three stops),
+  exactly like theme-producer's projection, instead of empty two-stop defaults.
+  The gradient editor's "add middle colour" still works for user-edited
+  two-stop maps.
+- The picker now shows the runtime role grid (51 roles) instead of
+  `ramp[i]` / `color0–15` / named legacy tokens. Generated themes pick the role
+  name; authored themes freeze the resolved hex.
+- `theme.palette()` is the source; a small semantic `FALLBACK_PALETTE` keeps a
+  first launch usable when the producer has not written `colors.yaml` yet.
+- No save/refresh behavior changed: btop output is still
+  `theme[key]="value"` (48 keys), pending edits stay user-editable, and a
+  `palette-refresh` still preserves edits/selection/scope/target/controls with
+  no restart.
+- `Makefile` typecheck relinks `node_modules/ags-platform` after `deps`
+  (`npm install` prunes extraneous symlinks), so `make gates` passes from a
+  fresh tree.
+
+Verify: `cd .worktrees/REQ-002 && make gates`;
+`rg -n '@color_' . --glob '*.css' --glob '*.ts' --glob '*.tsx' --glob '!node_modules' --glob '!build'`.
