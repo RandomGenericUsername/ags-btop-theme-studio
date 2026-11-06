@@ -13,6 +13,7 @@
 - [REQ-002-theme-semantics/ticket.md](./REQ-002-theme-semantics/ticket.md) — Migrate the studio to palette.v1 role semantics | `done` | links: none
 - [REQ-003-skin-consumption/ticket.md](./REQ-003-skin-consumption/ticket.md) — Consume the app-scoped skin plane | `done` | links: worktree `.worktrees/REQ-003/`, branch `ticket/REQ-003-skin-consumption`
 - [REQ-004-appearance-migration/ticket.md](./REQ-004-appearance-migration/ticket.md) — Migrate the studio to the v2 Appearance plane | `done` | links: worktree `.worktrees/REQ-004/`, branch `ticket/REQ-004-appearance-migration`
+- [REQ-005-layout-token-cleanup/ticket.md](./REQ-005-layout-token-cleanup/ticket.md) — Drop the btop layout token reads and restore natural panes | `in-progress` | links: worktree `.worktrees/REQ-005/`, branch `ticket/REQ-005-layout-token-cleanup`
 
 ## Bugs
 
