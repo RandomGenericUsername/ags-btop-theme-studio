@@ -396,7 +396,7 @@ test("the app package keeps its tests, vendored sources and live engine", () => 
   }
 });
 
-test("the contracts v0.3.0 manifest schema agrees with the platform", () => {
+test("the contracts v0.6.0 manifest schema agrees with the platform", () => {
   const contractsRoot = findContractsRoot();
   assert.notEqual(contractsRoot, null, "cannot find contracts (set CONTRACTS_ROOT)");
   const schema = JSON.parse(
@@ -415,10 +415,10 @@ test("the contracts v0.3.0 manifest schema agrees with the platform", () => {
   );
 });
 
-test("the Makefile pins the v0.4.0 platform / v0.3.0 contracts tuple and the full gate set", () => {
+test("the Makefile pins the v0.8.0 platform / v0.6.0 contracts tuple and the full gate set", () => {
   const makefile = readText("Makefile");
-  assert.match(makefile, /^AGS_PLATFORM_VERSION := v0\.4\.0$/m);
-  assert.match(makefile, /^CONTRACTS_VERSION := v0\.3\.0$/m);
+  assert.match(makefile, /^AGS_PLATFORM_VERSION := v0\.8\.0$/m);
+  assert.match(makefile, /^CONTRACTS_VERSION := v0\.6\.0$/m);
   assert.match(makefile, /^gates: test conformance drift bundle typecheck$/m);
   assert.match(makefile, /^ci: test conformance drift$/m);
 });

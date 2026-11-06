@@ -68,7 +68,7 @@ no self-hosted runner and no CI secret dependency.
   `uv`, `pyte`). Deliberately not a stock-runner gate.
 - `make gates` — test + conformance + drift + bundle + typecheck.
 
-The program tuple is `ags-platform` v0.4.0 / `contracts` v0.3.0, local-only in
+The program tuple is `ags-platform` v0.8.0 / `contracts` v0.6.0, local-only in
 this run. Locally the tags are symlinked under `.dev/` (gitignored); CI checks
 the tags out explicitly. Never commit a fetched platform, a `contracts`
 checkout, `node_modules/`, `@girs/`, generated `tsconfig.json` or bundle output.
@@ -89,7 +89,18 @@ tests. `app.tsx` registers the platform helper with this app's real work.
 `make conformance` asserts these source invariants and the platform
 `checkAppRepo` template gate. Do not weaken them to make a test pass.
 
-## 6. Releases
+## 6. Skin plane
+
+`app.tsx` declares one module-level
+`createAppSkin({ configDir: "ags-btop-studio" })` and `main()` calls
+`skin.apply()` immediately after `theme.apply()`. Only the CSS pointer
+(`$XDG_CONFIG_HOME/ags-btop-studio/skin.css`) is app-scoped; the grouped token
+map and both palette artifacts are shared. The adapter owns its monitor, so the
+palette-refresh handler stays theme-only and there is no skin-refresh request.
+`style.css` remains the bundled glass fallback. Layout is TSX-owned; this app
+has no v1 layout tokens.
+
+## 7. Releases
 
 Immutable annotated tags (`v0.1.0`, …); a published tag is never moved.
 Installed tags are read-only and writable state lives under XDG paths (AD-37).

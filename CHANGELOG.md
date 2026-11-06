@@ -2,6 +2,16 @@
 
 ## Unreleased — 2026-11-01
 
+- Consume the app-scoped skin plane (REQ-003): `app.tsx` declares one
+  `createAppSkin({ configDir: "ags-btop-studio" })` and `main()` calls
+  `skin.apply()` immediately after `theme.apply()`. The composed provider is
+  installed last at USER priority over the bundled `style.css` glass fallback;
+  missing skin artifacts are a no-op. The palette-refresh handler is unchanged
+  and no skin-refresh request is added — the adapter's own monitor reloads
+  `$XDG_CONFIG_HOME/ags-btop-studio/skin.css`. Add
+  `tests/skin-consumption.mjs` for the startup order, config dir, single
+  request handler and retained fallback. Pin the gate tuple at `ags-platform`
+  v0.8.0 / `contracts` v0.6.0.
 - Migrate the studio to the `palette.v1` semantics exposed by `ags-platform`
   v0.4.0 (REQ-002):
   - `style.css` chrome now references roles (`@surface`, `@on_surface`,
