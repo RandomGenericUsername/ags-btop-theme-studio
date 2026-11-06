@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.4.1 — 2026-11-06
+
+- Drop the unused btop layout token reads (REQ-005):
+  - `ui/StudioWindow.tsx` no longer reads
+    `layout.ags-btop-studio.left-width` / `right-width` or applies fixed
+    `set_size_request` widths. The left/right rails are natural again:
+    `style.css` owns the `280px` / `320px` minimums and the existing `hexpand`
+    is preserved; no structure, class or behavior change.
+  - `StudioWindow` returns to its pre-v2 one-argument signature. The
+    module-scope `createAppearance({ configDir: "ags-btop-studio" })` apply and
+    the `createAppearanceRefreshHandler(appearance, work)` refresh path are
+    unchanged.
+  - Update `tests/appearance-consumption.mjs` to reject layout-token usage
+    while keeping the appearance assertions; the preview engine and generated
+    widgets are untouched.
+
 ## v0.4.0 — 2026-11-06
 
 - Migrate the studio to the v2 Appearance plane (REQ-004):

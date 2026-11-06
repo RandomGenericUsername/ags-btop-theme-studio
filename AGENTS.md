@@ -99,9 +99,9 @@ this app's real work.
 `$XDG_CONFIG_HOME/ags-btop-studio/appearance.css` and its `tokens.json` carries
 the composed palette, skin and mode. There is one fixed `palette-refresh`
 command and no skin-refresh request. `style.css` remains the bundled glass
-fallback. Layout is TSX-owned: the rail widths are
-`layout.ags-btop-studio.left-width` (`280`) / `right-width` (`320`), read with
-`peek()` where GTK needs plain numbers.
+fallback. The rails are natural: `.studio-left-scroll` / `.studio-right` own the
+`280px` / `320px` CSS minimums and the panes otherwise expand; the app reads no
+`layout.*` tokens.
 
 ## 7. Releases
 

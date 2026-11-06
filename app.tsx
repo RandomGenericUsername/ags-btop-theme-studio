@@ -15,7 +15,7 @@ import { StudioWindow, refreshStudioPalette } from "./ui/StudioWindow";
 /**
  * Register one top-level window with the application.
  *
- * gnim types a JSX element — what `StudioWindow(monitor, appearance)` returns — as
+ * gnim types a JSX element — what `StudioWindow(monitor)` returns — as
  * `JSX.Element`, which it declares as the base `GObject.Object`, while AGS's
  * `app.add_window` is typed to take a `Gtk.Window`. At runtime the object a JSX
  * root call returns IS the `Gtk.Window` the tree was rooted in, so the cast
@@ -55,6 +55,6 @@ app.start({
     // chrome). Launch-on-demand only: never registered in the bar, never
     // autostarted (see openspec change add-btop-theme-studio).
     const monitor = app.get_monitors()[0];
-    if (monitor) addWindow(StudioWindow(monitor, appearance));
+    if (monitor) addWindow(StudioWindow(monitor));
   },
 });

@@ -10,8 +10,8 @@
 //      `main()` (no separate Theme/Skin applies);
 //   2. register exactly one `createAppearanceRefreshHandler` whose work is the
 //      pending-aware `refreshStudioPalette()` / base-map reload;
-//   3. read the app's namespaced layout tokens with their fallbacks and feed
-//      the existing pane size requests;
+//   3. consume no btop layout tokens: the rails keep the natural CSS
+//      `min-width` + `hexpand` construction, with no fixed pane size requests;
 //   4. keep `style.css` as the bundled glass fallback.
 //
 // Run with: node --test tests/appearance-consumption.mjs
@@ -168,24 +168,13 @@ test("no new request command is added", () => {
   assert.doesNotMatch(CLEAN, /PALETTE_REFRESH_COMMAND/);
 });
 
-test("the app reads its namespaced layout tokens with fallbacks", () => {
-  assert.match(
-    CLEAN_WINDOW,
-    /appearance\.value\(\s*"layout\.ags-btop-studio\.left-width",\s*280,?\s*\)/s,
-  );
-  assert.match(
-    CLEAN_WINDOW,
-    /appearance\.value\(\s*"layout\.ags-btop-studio\.right-width",\s*320,?\s*\)/s,
-  );
-  assert.match(
-    CLEAN_WINDOW,
-    /leftScroll\.set_size_request\(leftWidth\.peek\(\),\s*-1\)/,
-  );
-  assert.match(
-    CLEAN_WINDOW,
-    /right\.set_size_request\(rightWidth\.peek\(\),\s*-1\)/,
-  );
-  assert.match(CLEAN, /StudioWindow\(monitor,\s*appearance\)/);
+test("the studio consumes no btop layout tokens and keeps natural panes", () => {
+  assert.doesNotMatch(CLEAN_WINDOW, /layout\.ags-btop-studio/);
+  assert.doesNotMatch(CLEAN_WINDOW, /\bleftWidth\b|\brightWidth\b/);
+  assert.doesNotMatch(CLEAN_WINDOW, /leftScroll\.set_size_request\(/);
+  assert.doesNotMatch(CLEAN_WINDOW, /right\.set_size_request\(/);
+  assert.match(CLEAN, /StudioWindow\(monitor\)/);
+  assert.doesNotMatch(CLEAN, /StudioWindow\(monitor,\s*appearance\)/);
 });
 
 test("style.css remains the bundled glass fallback", () => {
