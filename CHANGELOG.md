@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — 2026-11-01
+## v0.3.0 — 2026-11-05
 
 - Consume the app-scoped skin plane (REQ-003): `app.tsx` declares one
   `createAppSkin({ configDir: "ags-btop-studio" })` and `main()` calls
