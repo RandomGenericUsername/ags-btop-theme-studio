@@ -5,8 +5,8 @@
 // This is the repo-local gate the standalone contract requires:
 //   1. `app.manifest.json` is schema-valid and carries the studio identity;
 //   2. app.tsx / window / launcher / config dir agree with that identity;
-//   3. the live palette-refresh handler is the real v0.5.0 pending-aware work
-//      (Theme pointer + palette reload) wrapped in the protocol helper;
+//   3. the live appearance-refresh handler uses the v2 helper (whole
+//      appearance apply + pending-aware palette/base-map reload);
 //   4. the shared dev-flow template is present and the platform's own
 //      `checkAppRepo` template gate passes;
 //   5. no template token survives and the local program tuple is pinned.
@@ -206,21 +206,28 @@ test("no unreplaced template token survives", () => {
 
 // ── 2. The live handler is real and pending-aware ──────────────────────────
 
-test("app.tsx registers the real palette-refresh handler", () => {
+test("app.tsx registers the v2 appearance-refresh handler", () => {
   const app = readText("app.tsx");
-  assert.match(app, /from\s+"\.\/lib\/palette-refresh"/);
-  assert.match(app, /createStudioPaletteRefresh\(/);
-  assert.match(app, /requestHandler:/);
+  assert.match(
+    app,
+    /import\s*\{[^}]*\bcreateAppearance\b[^}]*\}\s*from\s*"ags-platform\/adapters\/appearance"/s,
+  );
+  assert.match(app, /const appearance = createAppearance\(\{ configDir: "ags-btop-studio" \}\)/);
+  assert.match(app, /requestHandler: createAppearanceRefreshHandler\(appearance,/);
   assert.match(app, /applyStudioAppearance\(/);
-  assert.match(app, /applyTheme:\s*\(\)\s*=>\s*theme\.apply\(\)/);
   assert.match(app, /reloadPalette:\s*\(\)\s*=>\s*refreshStudioPalette\(\)/);
+  assert.doesNotMatch(app, /theme\.apply\(\)/, "the split Theme apply is gone");
+  assert.doesNotMatch(app, /skin\.apply\(\)/, "the split Skin apply is gone");
 });
 
-test("the handler module binds the platform helper to hash idempotency", () => {
-  const handler = readText("lib", "palette-refresh.ts");
-  assert.match(handler, /from\s+"ags-platform\/ports\/palette-refresh"/);
-  assert.match(handler, /createPaletteRefreshHandler\(/);
-  assert.match(handler, /createAppearanceRefresh\(apply\)/);
+test("the handler work uses the platform's v2 refresh helper", () => {
+  const app = readText("app.tsx");
+  assert.match(
+    app,
+    /import\s*\{[^}]*\bcreateAppearanceRefreshHandler\b[^}]*\}\s*from\s*"ags-platform\/adapters\/appearance"/s,
+  );
+  assert.match(app, /createAppearanceRefreshHandler\(appearance,\s*\(\)\s*=>/);
+  assert.equal((stripComments(app).match(/requestHandler\s*:/g) ?? []).length, 1);
 });
 
 test("the palette reload preserves staged edits and selection", () => {
@@ -381,6 +388,7 @@ test("the app package keeps its tests, vendored sources and live engine", () => 
     "tests/app-contract.test.mjs",
     "tests/schematic-graphics.mjs",
     "tests/platform-consumption.mjs",
+    "tests/appearance-consumption.mjs",
     "tests/key-widgets-verify.mjs",
     "lib/schematic-graphics.ts",
     "tools/key_widgets.py",
@@ -396,7 +404,7 @@ test("the app package keeps its tests, vendored sources and live engine", () => 
   }
 });
 
-test("the contracts v0.6.0 manifest schema agrees with the platform", () => {
+test("the contracts v0.7.0 manifest schema agrees with the platform", () => {
   const contractsRoot = findContractsRoot();
   assert.notEqual(contractsRoot, null, "cannot find contracts (set CONTRACTS_ROOT)");
   const schema = JSON.parse(
@@ -415,10 +423,10 @@ test("the contracts v0.6.0 manifest schema agrees with the platform", () => {
   );
 });
 
-test("the Makefile pins the v0.8.0 platform / v0.6.0 contracts tuple and the full gate set", () => {
+test("the Makefile pins the v0.9.0 platform / v0.7.0 contracts tuple and the full gate set", () => {
   const makefile = readText("Makefile");
-  assert.match(makefile, /^AGS_PLATFORM_VERSION := v0\.8\.0$/m);
-  assert.match(makefile, /^CONTRACTS_VERSION := v0\.6\.0$/m);
+  assert.match(makefile, /^AGS_PLATFORM_VERSION := v0\.9\.0$/m);
+  assert.match(makefile, /^CONTRACTS_VERSION := v0\.7\.0$/m);
   assert.match(makefile, /^gates: test conformance drift bundle typecheck$/m);
   assert.match(makefile, /^ci: test conformance drift$/m);
 });

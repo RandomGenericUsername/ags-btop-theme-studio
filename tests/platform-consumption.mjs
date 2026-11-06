@@ -3,8 +3,9 @@
 //
 // These make the REQ-007 acceptance executable rather than prose:
 //
-//   1. Theming routes through the platform `Theme` port; no app-local
-//      `theme.ts` and no direct `app.apply_css` call survives (spine AD-13).
+//   1. Appearance routes through the platform `Appearance` adapter; no
+//      app-local theme module, split Theme/Skin apply or direct `app.apply_css`
+//      call survives (spine AD-13).
 //   2. No app-local icon-registry / event-bus copy exists (AD-5/AD-7) — the
 //      studio has none today, and this pins that it does not grow one.
 //   3. No app -> app imports (spine AD-1): an app depends on `ags-platform`
@@ -73,17 +74,24 @@ function rel(path) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Theming through the platform Theme port
+// 1. Appearance through the platform Appearance adapter
 // ---------------------------------------------------------------------------
 
-test("the app applies its palette through the platform Theme port", () => {
+test("the app applies its appearance through the platform Appearance adapter", () => {
   const app = read(resolve(APP, "app.tsx"));
   assert.match(
     app,
-    /from "ags-platform\/adapters\/theme"/,
-    "app.tsx must import the platform Theme adapter (AD-13)",
+    /from "ags-platform\/adapters\/appearance"/,
+    "app.tsx must import the platform Appearance adapter (AD-13)",
   );
-  assert.match(app, /theme\.apply\(\)/, "app.tsx must call theme.apply()");
+  assert.match(
+    app,
+    /createAppearance\(\{ configDir: "ags-btop-studio" \}\)/,
+    "app.tsx must build the app-scoped appearance",
+  );
+  assert.match(app, /appearance\.apply\(\)/, "app.tsx must call appearance.apply()");
+  assert.doesNotMatch(app, /theme\.apply\(\)/, "the split Theme apply is gone");
+  assert.doesNotMatch(app, /skin\.apply\(\)/, "the split Skin apply is gone");
 });
 
 test("no direct app.apply_css call survives in the app", () => {
@@ -103,6 +111,7 @@ test("no direct app.apply_css call survives in the app", () => {
 test("no app-local theme / icon-registry / event-bus copy exists", () => {
   const banned = [
     "lib/theme.ts",
+    "lib/palette-refresh.ts",
     "lib/icon-registry.ts",
     "lib/event-bus.ts",
     "lib/event-bus-core.ts",

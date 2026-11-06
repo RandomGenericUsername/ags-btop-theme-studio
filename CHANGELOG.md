@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.4.0 — 2026-11-06
+
+- Migrate the studio to the v2 Appearance plane (REQ-004):
+  - `app.tsx` declares one module-level
+    `createAppearance({ configDir: "ags-btop-studio" })` and `main()` calls
+    `appearance.apply()` instead of the split `theme.apply()` / `skin.apply()`.
+    The runtime publishes one composed palette + skin + mode generation behind
+    `$XDG_STATE_HOME/dotfiles/current/appearance`; `style.css` stays the bundled
+    glass fallback and a missing generation is a no-op.
+  - The `palette-refresh` handler is
+    `createAppearanceRefreshHandler(appearance, work)`. The platform helper
+    re-applies the whole appearance first; the app-owned work keeps the
+    pending-aware `refreshStudioPalette()` / base-map reload, so staged edits,
+    the selected theme, picked key, scope, save target and preview controls
+    survive. No new request command is added and `lib/palette-refresh.ts` is
+    retired.
+  - Read the TSX-owned layout tokens
+    `layout.ags-btop-studio.left-width` (`280`) / `right-width` (`320`) and feed
+    the existing rail size requests. `style.css` keeps its `280px` / `320px`
+    glass fallbacks.
+  - Add `tests/appearance-consumption.mjs` for the module-level appearance
+    apply/configDir, the v2 handler wiring, the layout-token reads and the
+    retained fallback; update the unit and conformance suites.
+  - Pin the gate tuple at `ags-platform` v0.9.0 / `contracts` v0.7.0.
+
 ## v0.3.0 — 2026-11-05
 
 - Consume the app-scoped skin plane (REQ-003): `app.tsx` declares one

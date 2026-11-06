@@ -55,7 +55,7 @@ committable; never mix planning edits with implementation in one turn.
 no self-hosted runner and no CI secret dependency.
 
 - `make test` — pure unit suites: the studio libraries, platform consumption,
-  the generated key→widget drift guard, and the executable `palette-refresh`
+  the generated key→widget drift guard, and the executable appearance-refresh
   handler tests. Node + python3 only.
 - `make conformance` — manifest identity, the real live handler and the shared
   template gate.
@@ -68,20 +68,21 @@ no self-hosted runner and no CI secret dependency.
   `uv`, `pyte`). Deliberately not a stock-runner gate.
 - `make gates` — test + conformance + drift + bundle + typecheck.
 
-The program tuple is `ags-platform` v0.8.0 / `contracts` v0.6.0, local-only in
+The program tuple is `ags-platform` v0.9.0 / `contracts` v0.7.0, local-only in
 this run. Locally the tags are symlinked under `.dev/` (gitignored); CI checks
 the tags out explicitly. Never commit a fetched platform, a `contracts`
 checkout, `node_modules/`, `@girs/`, generated `tsconfig.json` or bundle output.
 
 ## 5. Palette-refresh invariants
 
-`lib/palette-refresh.ts` and `lib/appearance.ts` are pure and executed by
-tests. `app.tsx` registers the platform helper with this app's real work.
+`lib/appearance.ts` is pure and executed by tests. `app.tsx` registers the
+platform v2 helper, `createAppearanceRefreshHandler(appearance, work)`, with
+this app's real work.
 
 - exactly one JSON-string response per request, through the platform helper;
-- idempotent by appearance hash; a thrown refresh is not recorded as applied;
-- re-apply the Theme pointer before reloading the palette inputs;
-- **pending-aware** (`holdsUnsavedState: true`): the reload only replaces the
+- idempotent by appearance hash; a thrown apply is not recorded as applied;
+- the helper always re-applies the WHOLE appearance before the app work;
+- **pending-aware** (`holdsUnsavedState: true`): the app work only replaces the
   runtime palette and the generated base map. Staged edits (`pending`), the
   selected theme, the picked key, the edit scope, the save target and the
   live-preview controls survive. Never restart, quit or reset the studio.
@@ -89,16 +90,18 @@ tests. `app.tsx` registers the platform helper with this app's real work.
 `make conformance` asserts these source invariants and the platform
 `checkAppRepo` template gate. Do not weaken them to make a test pass.
 
-## 6. Skin plane
+## 6. Appearance plane (v2)
 
 `app.tsx` declares one module-level
-`createAppSkin({ configDir: "ags-btop-studio" })` and `main()` calls
-`skin.apply()` immediately after `theme.apply()`. Only the CSS pointer
-(`$XDG_CONFIG_HOME/ags-btop-studio/skin.css`) is app-scoped; the grouped token
-map and both palette artifacts are shared. The adapter owns its monitor, so the
-palette-refresh handler stays theme-only and there is no skin-refresh request.
-`style.css` remains the bundled glass fallback. Layout is TSX-owned; this app
-has no v1 layout tokens.
+`createAppearance({ configDir: "ags-btop-studio" })` and `main()` calls
+`appearance.apply()`. The adapter watches only
+`$XDG_STATE_HOME/dotfiles/current/appearance`; the stable consumer link is
+`$XDG_CONFIG_HOME/ags-btop-studio/appearance.css` and its `tokens.json` carries
+the composed palette, skin and mode. There is one fixed `palette-refresh`
+command and no skin-refresh request. `style.css` remains the bundled glass
+fallback. Layout is TSX-owned: the rail widths are
+`layout.ags-btop-studio.left-width` (`280`) / `right-width` (`320`), read with
+`peek()` where GTK needs plain numbers.
 
 ## 7. Releases
 

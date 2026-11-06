@@ -4,6 +4,7 @@ import Pango from "gi://Pango?version=1.0";
 import { createEffect, createState } from "ags";
 import { execAsync } from "ags/process";
 import { theme } from "ags-platform/adapters/theme";
+import type { Appearance } from "ags-platform/ports/appearance";
 import type { Palette } from "ags-platform/ports/palette";
 import {
   DEFAULT_CONTROLS,
@@ -175,7 +176,7 @@ export function refreshStudioPalette(): void {
 
 const LIVE_PLACEHOLDER = "Live preview not rendered yet — press “Refresh live preview”.";
 
-export function StudioWindow(gdkmonitor: Gdk.Monitor) {
+export function StudioWindow(gdkmonitor: Gdk.Monitor, appearance: Appearance) {
   const [confText] = createState(loadConfText());
   const [palette, setPalette] = createState<Palette>(loadPalette());
   const [themes, setThemes] = createState<Theme[]>(initialLibrary());
@@ -189,6 +190,12 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
   const [highlight, setHighlight] = createState(true);
   const [status, setStatus] = createState("");
   let themeSeq = 1;
+
+  // Layout metrics are TSX-owned v2 tokens. The fallbacks match the bundled
+  // `style.css` glass values, so a missing appearance generation keeps today's
+  // rail widths; `peek()` supplies the plain pixel numbers GTK asks for.
+  const leftWidth = appearance.value("layout.ags-btop-studio.left-width", 280);
+  const rightWidth = appearance.value("layout.ags-btop-studio.right-width", 320);
 
   const conf = () => parseBtopConf(confText());
   const current = () => themes().find((t) => t.id === currentId()) ?? themes()[0];
@@ -361,6 +368,7 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
     hscrollbar_policy: Gtk.PolicyType.NEVER,
     css_classes: ["studio-left-scroll"],
   });
+  leftScroll.set_size_request(leftWidth.peek(), -1);
   const left = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["studio-left"] });
   leftScroll.set_child(left);
   root.append(leftScroll);
@@ -773,6 +781,7 @@ export function StudioWindow(gdkmonitor: Gdk.Monitor) {
 
   // ── right rail ───────────────────────────────────────────────────────────
   const right = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["studio-right"] });
+  right.set_size_request(rightWidth.peek(), -1);
   const rightScroll = new Gtk.ScrolledWindow({
     vexpand: true,
     hexpand: true,

@@ -46,20 +46,19 @@ create, fork, tune, preview and deploy themes:
 
 This app depends on `ags-platform`, never on another app (AD-1):
 
-- **Theming** — the desktop palette is applied through the `Theme` port
-  (`ags-platform/adapters/theme`, AD-13). `style.css` chrome is bound to the
-  typed `palette.v1` roles (`@surface`, `@on_surface`, `@primary`, …) so a
-  palette swap restyles the window. The studio also reads the same typed
-  palette via `theme.palette()`; its generated candidate is a semantic
-  key→role map, not the legacy `colors:` index/ramp list. The two CONTENT
-  literals that remain are deliberate: `.canvas` is the neutral stage the
-  candidate btop theme is judged on, and `.live-frame` reproduces btop's own
-  black terminal.
-- **Skin** — the app-scoped skin plane (`createAppSkin({ configDir:
-  "ags-btop-studio" })`, platform v0.8.0) is applied after the palette. The
-  runtime-expanded `$XDG_CONFIG_HOME/ags-btop-studio/skin.css` overrides the
-  bundled `style.css` glass fallback; missing artifacts are a no-op and the
-  adapter's file monitor owns reloads (no skin-refresh request).
+- **Appearance (v2)** — the runtime composes palette + skin + mode into one
+  generation behind `$XDG_STATE_HOME/dotfiles/current/appearance`, and
+  `createAppearance({ configDir: "ags-btop-studio" })` (platform v0.9.0)
+  installs it as one USER-priority provider. `style.css` chrome is bound to the
+  typed `palette.v1` roles (`@surface`, `@on_surface`, `@primary`, …) so an
+  appearance swap restyles the window; the runtime-expanded
+  `$XDG_CONFIG_HOME/ags-btop-studio/appearance.css` overrides the bundled glass
+  fallback and missing artifacts are a no-op. The studio also reads the same
+  typed palette via `theme.palette()` for the picker; its generated candidate
+  is a semantic key→role map, not the legacy `colors:` index/ramp list. The two
+  CONTENT literals that remain are deliberate: `.canvas` is the neutral stage
+  the candidate btop theme is judged on, and `.live-frame` reproduces btop's
+  own black terminal.
 - **Icons / events** — this app has no icon-registry or event-bus copy and
   consumes no contract topic: it reads and writes files locally. The
   platform-consumption test pins that it does not grow one.
@@ -76,17 +75,18 @@ ags request palette-refresh <appearance-hash> -i btop-theme-studio
 
 The app:
 
-1. re-applies the stable Theme pointer;
+1. re-applies the whole appearance (palette + skin + mode) through the platform
+   `createAppearanceRefreshHandler`;
 2. reloads the runtime palette and the generated base map;
 3. leaves the staged edits (`pending`), selected theme, picked key, edit scope,
    save target and preview controls exactly as they are.
 
-`lib/appearance.ts` owns the ordering and hash idempotency; `lib/palette-refresh.ts`
-binds the platform's `createPaletteRefreshHandler`, so the response is exactly
-one JSON-encoded string (`{"ok":true}` or a protocol failure). A thrown refresh
-is retryable and is not recorded as applied. A wallpaper change never restarts
-the process; `holdsUnsavedState: true` means the refresh may never discard
-pending work.
+The platform helper owns the protocol and the appearance-hash ledger, so the
+response is exactly one JSON-encoded string (`{"ok":true}` or a protocol
+failure). `lib/appearance.ts` owns only the app-owned pending-aware reload. A
+thrown apply is retryable and is not recorded as applied. An appearance change
+never restarts the process; `holdsUnsavedState: true` means the refresh may
+never discard pending work.
 
 ## Layout
 
@@ -95,8 +95,7 @@ pending work.
 | `app.tsx` | AGS entry point — instance `btop-theme-studio`, one centered window |
 | `app.manifest.json` | identity tuple |
 | `lib/` | pure, I/O-free logic (unit-tested with plain `node`) |
-| `lib/palette-refresh.ts` | the executable live-refresh handler wiring |
-| `lib/appearance.ts` | pending-aware refresh order + appearance-hash idempotency |
+| `lib/appearance.ts` | pure pending-aware app-owned reload (palette + base map) |
 | `lib/key_widgets.json` | canonical generated key→widget map (drift-checked) |
 | `lib/key-widgets.generated.ts` | the importable form of the same artifact |
 | `ui/StudioWindow.tsx` | the window: schematic, key tree, picker, diagnosis, diff, save targets, live view |
@@ -122,14 +121,14 @@ Both are app runtime / reproducibility assets, not provisioning concerns:
 
 ## Local development
 
-The program tuple is `ags-platform` `v0.8.0` / `contracts` `v0.6.0`. In this
+The program tuple is `ags-platform` `v0.9.0` / `contracts` `v0.7.0`. In this
 run those tags are local-only; the local gates use gitignored symlinks under
 `.dev/`:
 
 ```sh
 mkdir -p .dev/ags-platform .dev/contracts
-ln -s ../../../ags-platform .dev/ags-platform/v0.8.0
-ln -s ../../../contracts .dev/contracts/v0.6.0
+ln -s ../../../ags-platform .dev/ags-platform/v0.9.0
+ln -s ../../../contracts .dev/contracts/v0.7.0
 ```
 
 `make platform-dev` also links `node_modules/ags-platform` (the Node-friendly
@@ -137,7 +136,7 @@ shortcut); `make contracts-dev` creates the contracts shortcut. `.dev/` is
 gitignored and never committed.
 
 ```sh
-make test          # pure suites + executable palette-refresh handler tests
+make test          # pure suites + executable appearance-refresh handler tests
 make conformance   # manifest + handler + template conformance
 make drift         # re-derive lib/key_widgets.json from vendored btop sources
 make typecheck     # LOCAL desktop stack: ags + GIR declarations

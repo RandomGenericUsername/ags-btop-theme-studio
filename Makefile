@@ -1,11 +1,12 @@
 .PHONY: help platform-dev contracts-dev deps types test conformance drift live-tests ci bundle typecheck gates clean
 
-# The program tuple this app builds/tests against (AD-31/AD-34). v0.8.0 is the
-# app-scoped Skin adapter this app consumes; contracts v0.6.0 is its frozen
-# skin vocabulary. Both are LOCAL-ONLY in this run: local gates use gitignored
-# symlinks under .dev/; CI checks the exact tags out explicitly once published.
-AGS_PLATFORM_VERSION := v0.8.0
-CONTRACTS_VERSION := v0.6.0
+# The program tuple this app builds/tests against (AD-31/AD-34). v0.9.0 is the
+# unified Appearance adapter this app consumes; contracts v0.7.0 is its frozen
+# appearance vocabulary. Both are LOCAL-ONLY in this run: local gates use
+# gitignored symlinks under .dev/; CI checks the exact tags out explicitly once
+# published.
+AGS_PLATFORM_VERSION := v0.9.0
+CONTRACTS_VERSION := v0.7.0
 AGS_PLATFORM_REPO := https://github.com/RandomGenericUsername/ags-platform.git
 CONTRACTS_REPO := https://github.com/RandomGenericUsername/contracts.git
 AGS_PLATFORM_DEV ?=
@@ -26,8 +27,8 @@ help:
 	@echo "make gates         all local gates: test + conformance + drift + bundle + typecheck"
 	@echo ""
 	@echo "Local-only tuple: put a checkout/symlink at"
-	@echo "  .dev/ags-platform/v0.8.0  (or AGS_PLATFORM_DEV=/path/to/ags-platform)"
-	@echo "  .dev/contracts/v0.6.0     (or CONTRACTS_ROOT=/path/to/contracts)"
+	@echo "  .dev/ags-platform/v0.9.0  (or AGS_PLATFORM_DEV=/path/to/ags-platform)"
+	@echo "  .dev/contracts/v0.7.0     (or CONTRACTS_ROOT=/path/to/contracts)"
 	@echo "Default contracts fallback is ../contracts."
 
 # The platform shortcut. It MUST point outside node_modules: Node refuses to
@@ -98,7 +99,7 @@ test: platform-dev
 	@command -v node >/dev/null || { echo "FAIL: test: node is not on PATH" >&2; exit 1; }
 	@for suite in theme-keys btop-conf key-map key-widgets-verify theme-model \
 		schematic preview schematic-graphics targets platform-consumption \
-		skin-consumption; do \
+		appearance-consumption; do \
 		echo "==> test: node tests/$$suite.mjs"; \
 		node tests/$$suite.mjs || exit 1; \
 	done
