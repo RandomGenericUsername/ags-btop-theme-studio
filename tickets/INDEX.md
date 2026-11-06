@@ -12,7 +12,7 @@
 - [REQ-001-bootstrap/ticket.md](./REQ-001-bootstrap/ticket.md) — Bootstrap ags-btop-theme-studio from ags-apps v0.5.0 | `done` | links: none
 - [REQ-002-theme-semantics/ticket.md](./REQ-002-theme-semantics/ticket.md) — Migrate the studio to palette.v1 role semantics | `done` | links: none
 - [REQ-003-skin-consumption/ticket.md](./REQ-003-skin-consumption/ticket.md) — Consume the app-scoped skin plane | `done` | links: worktree `.worktrees/REQ-003/`, branch `ticket/REQ-003-skin-consumption`
-- [REQ-004-appearance-migration/ticket.md](./REQ-004-appearance-migration/ticket.md) — Migrate the studio to the v2 Appearance plane | `in-progress` | links: worktree `.worktrees/REQ-004/`, branch `ticket/REQ-004-appearance-migration`
+- [REQ-004-appearance-migration/ticket.md](./REQ-004-appearance-migration/ticket.md) — Migrate the studio to the v2 Appearance plane | `done` | links: worktree `.worktrees/REQ-004/`, branch `ticket/REQ-004-appearance-migration`
 
 ## Bugs
 
