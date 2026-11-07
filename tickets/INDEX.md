@@ -14,7 +14,7 @@
 - [REQ-003-skin-consumption/ticket.md](./REQ-003-skin-consumption/ticket.md) — Consume the app-scoped skin plane | `done` | links: worktree `.worktrees/REQ-003/`, branch `ticket/REQ-003-skin-consumption`
 - [REQ-004-appearance-migration/ticket.md](./REQ-004-appearance-migration/ticket.md) — Migrate the studio to the v2 Appearance plane | `done` | links: worktree `.worktrees/REQ-004/`, branch `ticket/REQ-004-appearance-migration`
 - [REQ-005-layout-token-cleanup/ticket.md](./REQ-005-layout-token-cleanup/ticket.md) — Drop the btop layout token reads and restore natural panes | `done` | links: worktree `.worktrees/REQ-005/`, branch `ticket/REQ-005-layout-token-cleanup`
-- [REQ-006-generations-v3/ticket.md](./REQ-006-generations-v3/ticket.md) — Consume Generations v3 and pin platform v1.0.0 / contracts v0.8.0 | `in-progress` | links: worktree `.worktrees/REQ-006/`, branch `ticket/REQ-006-generations-v3`
+- [REQ-006-generations-v3/ticket.md](./REQ-006-generations-v3/ticket.md) — Consume Generations v3 and pin platform v1.0.0 / contracts v0.8.0 | `done` | links: worktree `.worktrees/REQ-006/`, branch `ticket/REQ-006-generations-v3`
 
 ## Bugs
 
