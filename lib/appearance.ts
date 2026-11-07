@@ -2,12 +2,12 @@
  * The pure app-owned work for the btop Theme Studio's live appearance refresh
  * (AD-27).
  *
- * The runtime invokes `palette-refresh <appearance-hash>` after an appearance
- * change. Platform v0.9.0's `createAppearanceRefreshHandler` re-applies the
- * WHOLE appearance (palette + skin + mode) first, so this app no longer owns a
- * `theme.apply()`/`skin.apply()` step or the hash ledger. What remains is the
- * studio's genuinely app-owned, pending-aware reload: replace only the runtime
- * palette and the generated base map.
+ * The runtime invokes `appearance-refresh <genHash>` after a generation change.
+ * Platform v1.0.0's `createAppearanceRefreshHandler` resolves and installs the
+ * requested WHOLE appearance (palette + skin + mode) first, so this app no
+ * longer owns a `theme.apply()`/`skin.apply()` step or the generation ledger.
+ * What remains is the studio's genuinely app-owned, pending-aware reload:
+ * replace only the runtime palette and the generated base map.
  *
  * The studio is an authoring tool with `holdsUnsavedState: true`
  * (app.manifest.json), so the reload is deliberately PENDING-AWARE: staged

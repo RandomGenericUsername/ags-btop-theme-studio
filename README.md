@@ -46,13 +46,13 @@ create, fork, tune, preview and deploy themes:
 
 This app depends on `ags-platform`, never on another app (AD-1):
 
-- **Appearance (v2)** — the runtime composes palette + skin + mode into one
-  generation behind `$XDG_STATE_HOME/dotfiles/current/appearance`, and
-  `createAppearance({ configDir: "ags-btop-studio" })` (platform v0.9.0)
+- **Appearance (v3)** — the runtime composes palette + skin + mode into one
+  immutable generation behind `$XDG_STATE_HOME/dotfiles/current`, and
+  `createAppearance({ configDir: "ags-btop-studio" })` (platform v1.0.0)
   installs it as one USER-priority provider. `style.css` chrome is bound to the
   typed `palette.v1` roles (`@surface`, `@on_surface`, `@primary`, …) so an
-  appearance swap restyles the window; the runtime-expanded
-  `$XDG_CONFIG_HOME/ags-btop-studio/appearance.css` overrides the bundled glass
+  appearance swap restyles the window; the committed
+  `current/appearance/ags-btop-studio.css` overrides the bundled glass
   fallback and missing artifacts are a no-op. The studio also reads the same
   typed palette via `theme.palette()` for the picker; its generated candidate
   is a semantic key→role map, not the legacy `colors:` index/ramp list. The two
@@ -65,28 +65,30 @@ This app depends on `ags-platform`, never on another app (AD-1):
 - **AD-24 (overlay lifecycle)** — measured, not assumed; the studio keeps the
   direct window-tree build (13.1 ms), as recorded in the original migration.
 
-## `palette-refresh` (live, pending-aware)
+## `appearance-refresh` (live, pending-aware)
 
 The runtime invokes:
 
 ```sh
-ags request palette-refresh <appearance-hash> -i btop-theme-studio
+ags request appearance-refresh <genHash> -i btop-theme-studio
 ```
 
 The app:
 
-1. re-applies the whole appearance (palette + skin + mode) through the platform
-   `createAppearanceRefreshHandler`;
+1. resolves and installs the requested generation (palette + skin + mode)
+   through the platform `createAppearanceRefreshHandler`;
 2. reloads the runtime palette and the generated base map;
 3. leaves the staged edits (`pending`), selected theme, picked key, edit scope,
    save target and preview controls exactly as they are.
 
-The platform helper owns the protocol and the appearance-hash ledger, so the
-response is exactly one JSON-encoded string (`{"ok":true}` or a protocol
-failure). `lib/appearance.ts` owns only the app-owned pending-aware reload. A
-thrown apply is retryable and is not recorded as applied. An appearance change
-never restarts the process; `holdsUnsavedState: true` means the refresh may
-never discard pending work.
+The platform helper owns the protocol and the generation-hash ledger, so the
+response is exactly one JSON-encoded string whose generation equals the request
+(`{"applied":"<genHash>"}`, `{"deferred":"…","genHash":"<genHash>"}` or
+`{"failed":"…","retryable":true|false,"genHash":"<genHash>"}`).
+`lib/appearance.ts` owns only the app-owned pending-aware reload. A thrown apply
+is retryable and is not recorded as applied. A generation change never restarts
+the process; `holdsUnsavedState: true` means the refresh may never discard
+pending work.
 
 ## Layout
 
@@ -121,14 +123,14 @@ Both are app runtime / reproducibility assets, not provisioning concerns:
 
 ## Local development
 
-The program tuple is `ags-platform` `v0.9.0` / `contracts` `v0.7.0`. In this
+The program tuple is `ags-platform` `v1.0.0` / `contracts` `v0.8.0`. In this
 run those tags are local-only; the local gates use gitignored symlinks under
 `.dev/`:
 
 ```sh
 mkdir -p .dev/ags-platform .dev/contracts
-ln -s ../../../ags-platform .dev/ags-platform/v0.9.0
-ln -s ../../../contracts .dev/contracts/v0.7.0
+ln -s ../../../ags-platform .dev/ags-platform/v1.0.0
+ln -s ../../../contracts .dev/contracts/v0.8.0
 ```
 
 `make platform-dev` also links `node_modules/ags-platform` (the Node-friendly
@@ -153,7 +155,7 @@ Run the app:
 
 ```sh
 ags run -d .
-ags request palette-refresh <appearance-hash> -i btop-theme-studio
+ags request appearance-refresh <genHash> -i btop-theme-studio
 ```
 
 ## Vendored sources

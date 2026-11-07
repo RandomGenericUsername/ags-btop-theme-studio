@@ -1,12 +1,12 @@
 .PHONY: help platform-dev contracts-dev deps types test conformance drift live-tests ci bundle typecheck gates clean
 
-# The program tuple this app builds/tests against (AD-31/AD-34). v0.9.0 is the
-# unified Appearance adapter this app consumes; contracts v0.7.0 is its frozen
-# appearance vocabulary. Both are LOCAL-ONLY in this run: local gates use
-# gitignored symlinks under .dev/; CI checks the exact tags out explicitly once
-# published.
-AGS_PLATFORM_VERSION := v0.9.0
-CONTRACTS_VERSION := v0.7.0
+# The program tuple this app builds/tests against (AD-31/AD-34). v1.0.0 is the
+# generation-bound Appearance adapter this app consumes; contracts v0.8.0 is its
+# frozen Generations v3 vocabulary. Both are LOCAL-ONLY in this run: local gates
+# use gitignored symlinks under .dev/; CI checks the exact tags out explicitly
+# once published.
+AGS_PLATFORM_VERSION := v1.0.0
+CONTRACTS_VERSION := v0.8.0
 AGS_PLATFORM_REPO := https://github.com/RandomGenericUsername/ags-platform.git
 CONTRACTS_REPO := https://github.com/RandomGenericUsername/contracts.git
 AGS_PLATFORM_DEV ?=
@@ -17,7 +17,7 @@ CONTRACTS_ROOT ?= $(if $(wildcard $(CONTRACTS_FETCH_DIR)/schemas/ags-app-manifes
 BUNDLE_FILE := build/btop-theme-studio.js
 
 help:
-	@echo "make test          pure suites + executable palette-refresh handler tests (stock runner)"
+	@echo "make test          pure suites + executable appearance-refresh handler tests (stock runner)"
 	@echo "make conformance   manifest + handler + template conformance (stock runner)"
 	@echo "make drift         re-derive lib/key_widgets.json from vendored btop sources (stock runner)"
 	@echo "make typecheck     desktop-stack tsc gate (LOCAL; needs ags + GIR)"
@@ -27,8 +27,8 @@ help:
 	@echo "make gates         all local gates: test + conformance + drift + bundle + typecheck"
 	@echo ""
 	@echo "Local-only tuple: put a checkout/symlink at"
-	@echo "  .dev/ags-platform/v0.9.0  (or AGS_PLATFORM_DEV=/path/to/ags-platform)"
-	@echo "  .dev/contracts/v0.7.0     (or CONTRACTS_ROOT=/path/to/contracts)"
+	@echo "  .dev/ags-platform/v1.0.0  (or AGS_PLATFORM_DEV=/path/to/ags-platform)"
+	@echo "  .dev/contracts/v0.8.0     (or CONTRACTS_ROOT=/path/to/contracts)"
 	@echo "Default contracts fallback is ../contracts."
 
 # The platform shortcut. It MUST point outside node_modules: Node refuses to

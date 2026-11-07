@@ -5,8 +5,8 @@
 // This is the repo-local gate the standalone contract requires:
 //   1. `app.manifest.json` is schema-valid and carries the studio identity;
 //   2. app.tsx / window / launcher / config dir agree with that identity;
-//   3. the live appearance-refresh handler uses the v2 helper (whole
-//      appearance apply + pending-aware palette/base-map reload);
+//   3. the live appearance-refresh handler uses the v3 helper (requested
+//      generation apply + pending-aware palette/base-map reload);
 //   4. the shared dev-flow template is present and the platform's own
 //      `checkAppRepo` template gate passes;
 //   5. no template token survives and the local program tuple is pinned.
@@ -206,7 +206,7 @@ test("no unreplaced template token survives", () => {
 
 // ── 2. The live handler is real and pending-aware ──────────────────────────
 
-test("app.tsx registers the v2 appearance-refresh handler", () => {
+test("app.tsx registers the v3 appearance-refresh handler", () => {
   const app = readText("app.tsx");
   assert.match(
     app,
@@ -216,11 +216,13 @@ test("app.tsx registers the v2 appearance-refresh handler", () => {
   assert.match(app, /requestHandler: createAppearanceRefreshHandler\(appearance,/);
   assert.match(app, /applyStudioAppearance\(/);
   assert.match(app, /reloadPalette:\s*\(\)\s*=>\s*refreshStudioPalette\(\)/);
+  assert.match(app, /return\s*\{\s*status:\s*"applied"\s*\}/);
   assert.doesNotMatch(app, /theme\.apply\(\)/, "the split Theme apply is gone");
   assert.doesNotMatch(app, /skin\.apply\(\)/, "the split Skin apply is gone");
+  assert.doesNotMatch(app, /palette-refresh|PALETTE_REFRESH_COMMAND/);
 });
 
-test("the handler work uses the platform's v2 refresh helper", () => {
+test("the handler work uses the platform's v3 generation-bound refresh helper", () => {
   const app = readText("app.tsx");
   assert.match(
     app,
@@ -404,7 +406,7 @@ test("the app package keeps its tests, vendored sources and live engine", () => 
   }
 });
 
-test("the contracts v0.7.0 manifest schema agrees with the platform", () => {
+test("the contracts v0.8.0 manifest schema agrees with the platform", () => {
   const contractsRoot = findContractsRoot();
   assert.notEqual(contractsRoot, null, "cannot find contracts (set CONTRACTS_ROOT)");
   const schema = JSON.parse(
@@ -423,10 +425,10 @@ test("the contracts v0.7.0 manifest schema agrees with the platform", () => {
   );
 });
 
-test("the Makefile pins the v0.9.0 platform / v0.7.0 contracts tuple and the full gate set", () => {
+test("the Makefile pins the v1.0.0 platform / v0.8.0 contracts tuple and the full gate set", () => {
   const makefile = readText("Makefile");
-  assert.match(makefile, /^AGS_PLATFORM_VERSION := v0\.9\.0$/m);
-  assert.match(makefile, /^CONTRACTS_VERSION := v0\.7\.0$/m);
+  assert.match(makefile, /^AGS_PLATFORM_VERSION := v1\.0\.0$/m);
+  assert.match(makefile, /^CONTRACTS_VERSION := v0\.8\.0$/m);
   assert.match(makefile, /^gates: test conformance drift bundle typecheck$/m);
   assert.match(makefile, /^ci: test conformance drift$/m);
 });

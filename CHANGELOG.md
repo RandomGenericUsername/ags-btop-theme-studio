@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.5.0 — 2026-11-07
+
+- Consume Generations v3 (REQ-006):
+  - Pin the gate tuple at `ags-platform` v1.0.0 / `contracts` v0.8.0 in the
+    `Makefile`, the stock-runner CI workflow and `tests/app-contract.test.mjs`.
+  - `createAppearance({ configDir: "ags-btop-studio" })` keeps the one
+    module-scope appearance and `appearance.apply()`; platform v1.0.0 now reads
+    `$XDG_STATE_HOME/dotfiles/current/manifest.json` plus
+    `current/appearance/ags-btop-studio.css` behind the one `current` pointer.
+  - The one request handler is the generation-bound
+    `appearance-refresh <genHash>` helper. Its pending-aware studio work still
+    reloads only the runtime palette and generated base map, and now returns the
+    frozen `{ status: "applied" }` work result. A stale v2 `palette-refresh`
+    request, an appearance hash or a missing generation hash is rejected.
+  - Rewrite `tests/unit.test.mjs` to execute the v3 protocol (requested-hash
+    apply/ack, idempotent work, retryable throws, deferred work, malformed and
+    retired requests) and update the source gates for the v3 handler.
+  - The preview engine, generated key widgets, btop parsing, `style.css` and
+    the natural panes are unchanged.
+
 ## v0.4.1 — 2026-11-06
 
 - Drop the unused btop layout token reads (REQ-005):

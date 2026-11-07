@@ -163,7 +163,7 @@ const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 
 /**
  * Studio palette refresher, registered by the one studio window and called from
- * the app-level `palette-refresh` handler. It reloads the runtime palette and
+ * the app-level `appearance-refresh` handler. It reloads the runtime palette and
  * the generated base map only; pending edits, the selected theme, the picker
  * scope and the active save target stay exactly as they are.
  */

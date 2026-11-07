@@ -68,20 +68,22 @@ no self-hosted runner and no CI secret dependency.
   `uv`, `pyte`). Deliberately not a stock-runner gate.
 - `make gates` — test + conformance + drift + bundle + typecheck.
 
-The program tuple is `ags-platform` v0.9.0 / `contracts` v0.7.0, local-only in
+The program tuple is `ags-platform` v1.0.0 / `contracts` v0.8.0, local-only in
 this run. Locally the tags are symlinked under `.dev/` (gitignored); CI checks
 the tags out explicitly. Never commit a fetched platform, a `contracts`
 checkout, `node_modules/`, `@girs/`, generated `tsconfig.json` or bundle output.
 
-## 5. Palette-refresh invariants
+## 5. Appearance-refresh invariants
 
 `lib/appearance.ts` is pure and executed by tests. `app.tsx` registers the
-platform v2 helper, `createAppearanceRefreshHandler(appearance, work)`, with
-this app's real work.
+platform v3 helper, `createAppearanceRefreshHandler(appearance, work)`, with
+this app's real work; the work returns the frozen `{ status: "applied" }`
+result.
 
 - exactly one JSON-string response per request, through the platform helper;
-- idempotent by appearance hash; a thrown apply is not recorded as applied;
-- the helper always re-applies the WHOLE appearance before the app work;
+- generation-bound: the response names the requested `<genHash>` exactly;
+- idempotent by generation hash; a thrown apply is not recorded as applied;
+- the helper always installs the requested WHOLE appearance before the app work;
 - **pending-aware** (`holdsUnsavedState: true`): the app work only replaces the
   runtime palette and the generated base map. Staged edits (`pending`), the
   selected theme, the picked key, the edit scope, the save target and the
@@ -90,18 +92,18 @@ this app's real work.
 `make conformance` asserts these source invariants and the platform
 `checkAppRepo` template gate. Do not weaken them to make a test pass.
 
-## 6. Appearance plane (v2)
+## 6. Appearance plane (v3)
 
 `app.tsx` declares one module-level
 `createAppearance({ configDir: "ags-btop-studio" })` and `main()` calls
-`appearance.apply()`. The adapter watches only
-`$XDG_STATE_HOME/dotfiles/current/appearance`; the stable consumer link is
-`$XDG_CONFIG_HOME/ags-btop-studio/appearance.css` and its `tokens.json` carries
-the composed palette, skin and mode. There is one fixed `palette-refresh`
-command and no skin-refresh request. `style.css` remains the bundled glass
-fallback. The rails are natural: `.studio-left-scroll` / `.studio-right` own the
-`280px` / `320px` CSS minimums and the panes otherwise expand; the app reads no
-`layout.*` tokens.
+`appearance.apply()`. The adapter watches only the one committed
+`$XDG_STATE_HOME/dotfiles/current` pointer and reads its `manifest.json` plus
+`appearance/ags-btop-studio.css` (with `appearance/tokens.json` carrying the
+composed palette, skin and mode). There is one fixed
+`appearance-refresh <genHash>` command and no skin-refresh request. `style.css`
+remains the bundled glass fallback. The rails are natural:
+`.studio-left-scroll` / `.studio-right` own the `280px` / `320px` CSS minimums
+and the panes otherwise expand; the app reads no `layout.*` tokens.
 
 ## 7. Releases
 
