@@ -1,11 +1,11 @@
 .PHONY: help platform-dev contracts-dev deps types test conformance drift live-tests ci bundle typecheck gates clean
 
-# The program tuple this app builds/tests against (AD-31/AD-34). v1.0.0 is the
+# The program tuple this app builds/tests against (AD-31/AD-34). v1.0.1 is the
 # generation-bound Appearance adapter this app consumes; contracts v0.8.0 is its
 # frozen Generations v3 vocabulary. Both are LOCAL-ONLY in this run: local gates
 # use gitignored symlinks under .dev/; CI checks the exact tags out explicitly
 # once published.
-AGS_PLATFORM_VERSION := v1.0.0
+AGS_PLATFORM_VERSION := v1.0.1
 CONTRACTS_VERSION := v0.8.0
 AGS_PLATFORM_REPO := https://github.com/RandomGenericUsername/ags-platform.git
 CONTRACTS_REPO := https://github.com/RandomGenericUsername/contracts.git
@@ -27,7 +27,7 @@ help:
 	@echo "make gates         all local gates: test + conformance + drift + bundle + typecheck"
 	@echo ""
 	@echo "Local-only tuple: put a checkout/symlink at"
-	@echo "  .dev/ags-platform/v1.0.0  (or AGS_PLATFORM_DEV=/path/to/ags-platform)"
+	@echo "  .dev/ags-platform/v1.0.1  (or AGS_PLATFORM_DEV=/path/to/ags-platform)"
 	@echo "  .dev/contracts/v0.8.0     (or CONTRACTS_ROOT=/path/to/contracts)"
 	@echo "Default contracts fallback is ../contracts."
 
