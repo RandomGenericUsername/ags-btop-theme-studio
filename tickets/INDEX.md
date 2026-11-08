@@ -24,7 +24,7 @@
 
 ## Ops tasks
 
-(none)
+- [OPS-001-dev-pin-v1.0.1/ticket.md](./OPS-001-dev-pin-v1.0.1/ticket.md) — Bump the local ags-platform dev pin to v1.0.1 | `in-progress` | links: worktree `.worktrees/OPS-001/`, branch `ticket/OPS-001-dev-pin-v1.0.1`
 
 ## Spikes
 
