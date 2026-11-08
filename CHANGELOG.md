@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.5.1 — 2026-11-07
+
+- Bump the local `ags-platform` dev pin from `v1.0.0` to `v1.0.1` (OPS-001):
+  - `Makefile`, the stock-runner CI workflow, `tests/app-contract.test.mjs`,
+    `README.md`, `AGENTS.md` and the appearance-consumption test comment name
+    the `v1.0.1` pin and the `.dev/ags-platform/v1.0.1` path.
+  - `contracts` stays `v0.8.0`; app code, handler/ack behavior, the preview
+    engine, generated widgets, `style.css`, layout tokens and lane policy are
+    unchanged.
+
 ## v0.5.0 — 2026-11-07
 
 - Consume Generations v3 (REQ-006):
