@@ -25,6 +25,7 @@
 ## Ops tasks
 
 - [OPS-001-dev-pin-v1.0.1/ticket.md](./OPS-001-dev-pin-v1.0.1/ticket.md) — Bump the local ags-platform dev pin to v1.0.1 | `done` | links: worktree `.worktrees/OPS-001/`, branch `ticket/OPS-001-dev-pin-v1.0.1`
+- [OPS-002-dev-pin-v1.1.0/ticket.md](./OPS-002-dev-pin-v1.1.0/ticket.md) — Bump the local dev tuple to ags-platform v1.1.0 / contracts v0.12.0 | `in-progress` | links: worktree `.worktrees/OPS-002/`, branch `ticket/OPS-002-dev-pin-v1.1.0`
 
 ## Spikes
 
