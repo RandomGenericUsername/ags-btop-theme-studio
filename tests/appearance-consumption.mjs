@@ -1,6 +1,6 @@
 // Source-level gate for REQ-004/REQ-006: consume the v3 Appearance plane.
 //
-// Platform v1.0.1 exports `createAppearance({ configDir })` and
+// Platform v1.1.0 exports `createAppearance({ configDir })` and
 // `createAppearanceRefreshHandler(appearance, work)`. The adapter owns the one
 // provider and the one monitor on `$XDG_STATE_HOME/dotfiles/current`, reads
 // `current/manifest.json` plus `current/appearance/<configDir>.css`, and the

@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.2 — 2026-11-12
+
+- Bump the local dev tuple to `ags-platform` `v1.1.0` / `contracts` `v0.12.0`
+  (OPS-002), dev-pin parity only:
+  - `Makefile`, the stock-runner CI workflow, `tests/app-contract.test.mjs`,
+    `README.md`, `AGENTS.md` and the appearance-consumption test comment name
+    the `v1.1.0` platform / `v0.12.0` contracts pin and the
+    `.dev/ags-platform/v1.1.0` / `.dev/contracts/v0.12.0` paths.
+  - App code, UI, handler/ack behavior, the preview engine, generated widgets,
+    `style.css`, layout tokens and lane policy are unchanged.
+
 ## v0.5.1 — 2026-11-07
 
 - Bump the local `ags-platform` dev pin from `v1.0.0` to `v1.0.1` (OPS-001):

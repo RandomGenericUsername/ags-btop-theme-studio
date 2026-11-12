@@ -48,7 +48,7 @@ This app depends on `ags-platform`, never on another app (AD-1):
 
 - **Appearance (v3)** — the runtime composes palette + skin + mode into one
   immutable generation behind `$XDG_STATE_HOME/dotfiles/current`, and
-  `createAppearance({ configDir: "ags-btop-studio" })` (platform v1.0.1)
+  `createAppearance({ configDir: "ags-btop-studio" })` (platform v1.1.0)
   installs it as one USER-priority provider. `style.css` chrome is bound to the
   typed `palette.v1` roles (`@surface`, `@on_surface`, `@primary`, …) so an
   appearance swap restyles the window; the committed
@@ -123,14 +123,14 @@ Both are app runtime / reproducibility assets, not provisioning concerns:
 
 ## Local development
 
-The program tuple is `ags-platform` `v1.0.1` / `contracts` `v0.8.0`. In this
+The program tuple is `ags-platform` `v1.1.0` / `contracts` `v0.12.0`. In this
 run those tags are local-only; the local gates use gitignored symlinks under
 `.dev/`:
 
 ```sh
 mkdir -p .dev/ags-platform .dev/contracts
-ln -s ../../../ags-platform .dev/ags-platform/v1.0.1
-ln -s ../../../contracts .dev/contracts/v0.8.0
+ln -s ../../../ags-platform .dev/ags-platform/v1.1.0
+ln -s ../../../contracts .dev/contracts/v0.12.0
 ```
 
 `make platform-dev` also links `node_modules/ags-platform` (the Node-friendly
